@@ -38,8 +38,7 @@ subprocess.run(['swiftc','-O',str(source/'BluetoothPipe.swift'),'-framework','IO
     '-o',str(helpers/'BluetoothPipe')],check=True)
 sign(helpers/'BluetoothPipe')
 
-icon=output/'icon.png'
-subprocess.run(['swift',str(source/'Icon.swift'),str(icon)],check=True)
+icon=source/'AppIcon.png'
 iconset=output/'AppIcon.iconset';iconset.mkdir(exist_ok=True)
 for size in (16,32,128,256,512):
     for scale in (1,2):

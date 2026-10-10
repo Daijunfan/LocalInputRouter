@@ -1,5 +1,7 @@
 # 输入路由（macOS） / Input Router for Mac
 
+<img src="Mac/AppIcon.png" alt="输入路由图标" width="112">
+
 这是一个**纯 Mac 应用**：用 Mac 键盘和触控板控制 Windows，不需要 Toolbox。Windows 上的 Deskflow 和 `Support/WindowsReceiver/` 只负责接收输入，没有 Windows 版应用或第二套操作界面。点击 Mac 应用按钮、按自定义快捷键，或在触控板上三指连续轻点两次，可以在两台电脑间切换输入；连续按三次 Esc 会立即停止转发并返回 Mac。
 
 ## 安装
