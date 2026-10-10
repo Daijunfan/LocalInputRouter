@@ -1,15 +1,15 @@
-# 输入路由 / Input Router
+# 输入路由（macOS） / Input Router for Mac
 
-用 Mac 键盘和触控板控制一台 Windows 电脑。它是独立的 macOS 应用，不需要 Toolbox；Windows 端使用 Deskflow 和本项目的原生触控板、语音及剪贴板接收器。点击按钮、按自定义快捷键，或在触控板上三指连续轻点两次，可以在两台电脑间切换输入。连续按三次 Esc 会立即停止转发并返回 Mac。
+这是一个**纯 Mac 应用**：用 Mac 键盘和触控板控制 Windows，不需要 Toolbox。Windows 上的 Deskflow 和 `Support/WindowsReceiver/` 只负责接收输入，没有 Windows 版应用或第二套操作界面。点击 Mac 应用按钮、按自定义快捷键，或在触控板上三指连续轻点两次，可以在两台电脑间切换输入；连续按三次 Esc 会立即停止转发并返回 Mac。
 
 ## 安装
 
 **Mac：**安装 [Deskflow](https://github.com/deskflow/deskflow) 1.27 和 Xcode Command Line Tools，运行 `python3 build.py`，打开 `build/Input Router.app`。构建脚本只从本机已安装的 Deskflow 复制运行组件；仓库不包含 Deskflow 二进制文件。应用会在当前 Mac 用户的数据目录中生成专用 SSH 密钥和会话令牌。首次使用需按 macOS 提示授予辅助功能和输入监控权限。
 
-**Windows：**安装 [Deskflow for Windows](https://github.com/deskflow/deskflow) 1.27。用将实际接收键盘输入的 **Windows 管理员账户**打开管理员 PowerShell，运行：
+**Windows 接收端准备：**安装 [Deskflow for Windows](https://github.com/deskflow/deskflow) 1.27。用将实际接收键盘输入的 **Windows 管理员账户**打开管理员 PowerShell，运行：
 
 ```powershell
-./Windows/setup.ps1 -MacPublicKey 'ssh-ed25519 AAAA...'
+./Support/WindowsReceiver/setup.ps1 -MacPublicKey 'ssh-ed25519 AAAA...'
 ```
 
 这里粘贴 Mac 应用“Windows 设备与配对”里的完整 SSH 公钥。脚本编译并安装当前用户的 Windows 接收器，注册登录任务，启动 OpenSSH Server；SSH 防火墙新规则只接受本地子网。脚本最后显示 Windows 用户名、主机名、局域网 IPv4 和 SSH 主机指纹。其他 Mac 用户可以分别运行一次脚本，追加各自公钥；一台 Windows 同时只由一台 Mac 控制。
@@ -21,7 +21,7 @@
 蓝牙使用同一套 SSH 公钥和主机指纹。先在局域网完成首次身份核对，在操作系统中配对两台电脑，然后在 Windows 重新运行设置脚本并指定 Mac 蓝牙地址：
 
 ```powershell
-./Windows/setup.ps1 -MacPublicKey 'ssh-ed25519 AAAA...' -MacBluetoothAddress 'AA:BB:CC:DD:EE:FF'
+./Support/WindowsReceiver/setup.ps1 -MacPublicKey 'ssh-ed25519 AAAA...' -MacBluetoothAddress 'AA:BB:CC:DD:EE:FF'
 ```
 
 Windows 蓝牙桥只接受这个 Mac 地址，默认 RFCOMM 通道为 28，只转接 Windows 本机 SSH 端口。Mac 应用填写 Windows 的蓝牙地址及相同通道，选择“蓝牙直连”即可；Mac 的 Wi-Fi 可以继续保持连接。蓝牙速度通常低于 Wi-Fi。切换到另一台 Mac 时，需要在 Windows 更新允许的蓝牙地址。
@@ -35,7 +35,7 @@ Windows 蓝牙桥只接受这个 Mac 地址，默认 RFCOMM 通道为 28，只�
 
 ## 数据与安全边界
 
-源码只在本仓库。生成应用写入 `build/`；Mac 密钥、主机指纹、会话令牌、用户设置和运行记录位于 `~/Library/Application Support/LocalInputRouter/`。Windows 程序位于当前用户的 `%LOCALAPPDATA%\Programs\LocalInputRouter\`，用户数据位于 `%LOCALAPPDATA%\LocalInputRouter\`，蓝牙允许地址位于 `%ProgramData%\LocalInputRouter\`。这些位置均不属于公开仓库。
+Mac 应用源码在 `Mac/`，构建输出写入 `build/`；Mac 密钥、主机指纹、会话令牌、用户设置和运行记录位于 `~/Library/Application Support/LocalInputRouter/`。Windows 所需的无界面接收端源码在 `Support/WindowsReceiver/`；它们编译到当前用户的 `%LOCALAPPDATA%\Programs\LocalInputRouter\`，运行数据位于 `%LOCALAPPDATA%\LocalInputRouter\`，蓝牙允许地址位于 `%ProgramData%\LocalInputRouter\`。这些运行目录均不属于公开仓库。
 
 输入数据通过已验证指纹和公钥的 SSH 连接传输。Deskflow 与触控板/语音/剪贴板通道分别占用隧道内的本机回环端口 24900、24901、24903、24904；Windows 局域网中只需要 SSH 端口 22。锁屏后只要 Windows 保持登录和运行即可继续连接；休眠或关机期间无法接收。本开源版的自动 RDP 会话切换未进行通用主机验收，主要支持 Windows 的实体桌面会话。
 
@@ -43,7 +43,7 @@ Windows 蓝牙桥只接受这个 Mac 地址，默认 RFCOMM 通道为 28，只�
 
 macOS 构建使用当前用户 Keychain 中生成的固定本地签名身份，更新时保持身份；签名私钥不在应用包或 Git 仓库中。原生输入安全逻辑（尤其三次 Esc 回退）沿用已有实现。
 
-本次已在 Mac 上编译并验证独立应用、源码清单和签名。按用户要求，当前 Windows 主机不在身边，本次未进行 Windows 实机验收或蓝牙实机测速；仓库不提供未经验证的 Windows 二进制文件。
+本次已在 Mac 上编译并打开独立应用，检查源码清单和签名。按用户要求，当前 Windows 主机不在身边，本次未进行 Windows 接收端或蓝牙的实机验收；公开仓库仅包含 Mac 应用源码与必要的接收端支持源码，不提供 Windows 版应用。
 
 Windows OpenSSH Server 的安装与管理员账户公钥要求见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration)。Deskflow 二进制及许可证由 [Deskflow 项目](https://github.com/deskflow/deskflow)提供；本仓库只发布本项目源码。
 
