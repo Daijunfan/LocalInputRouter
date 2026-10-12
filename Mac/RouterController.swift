@@ -36,6 +36,7 @@ final class RouterController: ObservableObject {
     @Published var pendingDestination: InputDestination?
     @Published var toggleShortcut = RouterShortcut.toggle
     @Published var emergencyShortcut = RouterShortcut.emergency
+    @Published private(set) var switchGesture = TouchSwitchGesture(rawValue: UserDefaults.standard.string(forKey: "switchGesture") ?? "") ?? .threeDouble
     @Published private(set) var pointerGain = 1.0
     @Published private(set) var scrollGain = 1.5
     private var engine: Process?
@@ -127,6 +128,7 @@ final class RouterController: ObservableObject {
         }
         trackpad.onContacts = { count in inputControl.setContactCount(count) }
         trackpad.onTapReservation = { reserved in inputControl.setTapReservation(reserved) }
+        trackpad.setSwitchGesture(switchGesture)
         trackpad.onDoubleTap = { [weak self] in
             guard let self, self.pendingDestination == nil else { return }
             self.select(self.destination == .mac ? .windows : .mac)
@@ -196,6 +198,9 @@ final class RouterController: ObservableObject {
                             self.status = error
                         }
                     case "reconnect": self.reconnect()
+                    case "switch-gesture":
+                        if let value = note.userInfo?["value"] as? String,
+                           let gesture = TouchSwitchGesture(rawValue: value) { self.setSwitchGesture(gesture) }
                     case "modifier-pulse": if self.connected && self.destination == .windows { RouterEntry.modifierPulse() }
                     case "voice-path-check":
                         let result: [String: Any] = self.connected && self.destination == .windows && self.voiceKeysReady
@@ -662,6 +667,14 @@ final class RouterController: ObservableObject {
         return nil
     }
 
+    func setSwitchGesture(_ value: TouchSwitchGesture) {
+        guard switchGesture != value else { return }
+        trackpad.setSwitchGesture(value)
+        switchGesture = value
+        UserDefaults.standard.set(value.rawValue, forKey: "switchGesture")
+        writeState(request: "gesture")
+    }
+
     func reconnect() { stopProcesses(); running = true; desired = .mac; nextRetry = .distantPast; check() }
     func setTransport(_ value: RouterTransport) {
         guard transport != value else { return }
@@ -793,7 +806,8 @@ final class RouterController: ObservableObject {
             "clipboardReady": clipboardReady, "clipboardStatus": clipboardStatus,
             "tunnelPID": tunnel?.processIdentifier ?? 0, "guardianPID": guardian?.processIdentifier ?? 0,
             "toggleShortcut": toggleShortcut.title, "emergencyShortcut": emergencyShortcut.title,
-            "pointerGain": pointerGain, "scrollGain": scrollGain, "voiceReady": voiceReady, "voiceKeysReady": voiceKeysReady, "voiceStatus": voiceStatus, "gesturesStatus": gesturesStatus, "nativeTrackpad": trackpad.snapshot,
+            "pointerGain": pointerGain, "scrollGain": scrollGain, "switchGesture": switchGesture.rawValue,
+            "voiceReady": voiceReady, "voiceKeysReady": voiceKeysReady, "voiceStatus": voiceStatus, "gesturesStatus": gesturesStatus, "nativeTrackpad": trackpad.snapshot,
             "routedMotion": controls.motionSnapshot,
             "pendingDestination": pendingDestination?.rawValue ?? ""]
         if let data = try? JSONSerialization.data(withJSONObject: snapshot, options: [.sortedKeys]) {

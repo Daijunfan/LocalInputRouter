@@ -23,6 +23,7 @@ final class TrackpadBridge: @unchecked Sendable {
     private var pingStarted: Double?
     private var capturing = false
     private var tapToggle = ThreeFingerDoubleTap()
+    private var switchGesture = TouchSwitchGesture.threeDouble
     private var tapGeneration = 0, tapToggles = 0
     private var roundTrips: [Double] = []
     var onState: ((Bool, String) -> Void)?
@@ -31,6 +32,13 @@ final class TrackpadBridge: @unchecked Sendable {
     var onScrollReady: ((Bool) -> Void)?
     var onDoubleTap: (() -> Void)?
     var onTapReservation: ((Bool) -> Void)?
+
+    func setSwitchGesture(_ gesture: TouchSwitchGesture) {
+        queue.sync {
+            switchGesture = gesture; tapToggle = ThreeFingerDoubleTap(mode: gesture)
+            tapGeneration += 1; onTapReservation?(false)
+        }
+    }
 
     func startCapture() {
         guard !capturing else { return }
@@ -47,7 +55,7 @@ final class TrackpadBridge: @unchecked Sendable {
     func stopCapture() {
         DJFStopTrackpad(); capturing = false
         if contactOwner === self { contactOwner = nil }
-        queue.sync { tapToggle = ThreeFingerDoubleTap(); tapGeneration += 1; onTapReservation?(false) }
+        queue.sync { tapToggle = ThreeFingerDoubleTap(mode: switchGesture); tapGeneration += 1; onTapReservation?(false) }
     }
     func start(tokenURL: URL) {
         stop(); startCapture()
@@ -175,7 +183,7 @@ final class TrackpadBridge: @unchecked Sendable {
                 self.tapToggle.expire(); self.onTapReservation?(self.tapToggle.reserving)
                 if wasRemote && self.routing && self.ready { self.send(["type":"action", "action":0]) }
             }
-        case .double:
+        case .toggle:
             tapGeneration += 1; tapToggles += 1
             DispatchQueue.main.async { [weak self] in self?.onDoubleTap?() }
         case .none: break
@@ -198,8 +206,11 @@ final class TrackpadBridge: @unchecked Sendable {
         } else { skippedFrames += 1 }
         if contacts.isEmpty && touchStart != 0 {
             // Windows' gesture-only device leaves discrete multi-finger taps to its caller.
-            if (4...5).contains(peakFingers) && time - touchStart < 0.3 && maxDistance < 0.025 {
-                send(["type": "action", "action": (peakFingers - 3) * 3])
+            if time - touchStart < 0.3 && maxDistance < 0.025 {
+                if peakFingers == 3 && switchGesture == .fourSingle { send(["type": "action", "action": 0]) }
+                if (4...5).contains(peakFingers) && !(peakFingers == 4 && switchGesture == .fourSingle) {
+                    send(["type": "action", "action": (peakFingers - 3) * 3])
+                }
             }
             clearGesture()
         }

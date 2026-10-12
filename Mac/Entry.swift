@@ -24,13 +24,16 @@ enum RouterEntry {
         }
         if args.contains("--self-test") { exit(runInputChecks()) }
         if args.contains("--self-test-custom") { exit(runInputChecks(custom: true)) }
-        if args.count > 1 && ["--status", "--switch", "--stop", "--reconnect", "--quit", "--pointer-gain", "--scroll-gain", "--transport", "--modifier-pulse", "--voice-path-check"].contains(args[1]) {
+        if args.count > 1 && ["--status", "--switch", "--stop", "--reconnect", "--quit", "--pointer-gain", "--scroll-gain", "--transport", "--switch-gesture", "--modifier-pulse", "--voice-path-check"].contains(args[1]) {
             let command = args[1] == "--switch" ? (args.count == 3 ? args[2] : "invalid") : String(args[1].dropFirst(2))
-            guard ["status", "mac", "windows", "stop", "reconnect", "quit", "pointer-gain", "scroll-gain", "transport", "modifier-pulse", "voice-path-check"].contains(command) else {
+            guard ["status", "mac", "windows", "stop", "reconnect", "quit", "pointer-gain", "scroll-gain", "transport", "switch-gesture", "modifier-pulse", "voice-path-check"].contains(command) else {
                 print("Usage: --status | --switch mac/windows | --stop | --reconnect | --quit"); exit(1)
             }
             if command == "transport" && (args.count != 3 || RouterTransport(rawValue: args[2]) == nil) {
                 print("Usage: --transport direct/bluetooth"); exit(1)
+            }
+            if command == "switch-gesture" && (args.count != 3 || TouchSwitchGesture(rawValue: args[2]) == nil) {
+                print("Usage: --switch-gesture threeDouble/fourSingle"); exit(1)
             }
             if command == "pointer-gain" || command == "scroll-gain" {
                 guard args.count == 3, let value = Double(args[2]), value.isFinite, (0.1...10).contains(value) else {

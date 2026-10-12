@@ -67,7 +67,7 @@ struct RouterView: View {
                     .background(LinearGradient(colors: [.blue, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 15))
                 VStack(alignment: .leading, spacing: 4) {
                     Text("一套键盘与触控板，两台电脑").font(.title2.bold())
-                    Text("三指连续轻点两次，或按切换键，交给另一台电脑").foregroundStyle(.secondary)
+                    Text(router.switchGesture.title + "，或按切换键，交给另一台电脑").foregroundStyle(.secondary)
                 }
                 Spacer()
             }
@@ -169,6 +169,14 @@ struct RouterView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             VStack(spacing: 14) {
+                HStack {
+                    Text("触控板切换手势").font(.callout)
+                    Spacer()
+                    Picker("触控板切换手势", selection: Binding(get: { router.switchGesture }, set: { router.setSwitchGesture($0) })) {
+                        ForEach(TouchSwitchGesture.allCases, id: \.self) { gesture in Text(gesture.title).tag(gesture) }
+                    }.labelsHidden().frame(width: 180)
+                }
+                Divider()
                 shortcut("切换 Mac / Windows", keys: router.toggleShortcut.title) { shortcutEdit = .toggle }
                 Divider()
                 shortcut("紧急返回 Mac", keys: router.emergencyShortcut.title) { shortcutEdit = .emergency }
