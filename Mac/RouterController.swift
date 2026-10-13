@@ -5,6 +5,7 @@ import Combine
 import Network
 import IOKit.pwr_mgt
 import Security
+import Darwin
 
 enum RouterTransport: String, CaseIterable {
     case direct, bluetooth
@@ -48,6 +49,10 @@ final class RouterController: ObservableObject {
     private var logBuffer = ""
     private var desired = InputDestination.mac
     private var nextRetry = Date.distantPast
+    private var retryCount = 0
+    private var networkSignature = ""
+    private var networkObserved = false
+    private var localPeerName: String { peerHost.contains(".") ? peerHost : peerHost + ".local" }
     @Published private(set) var usingConfiguredSSH = false
     var connectionRoute: String { transport == .direct ? "局域网直连" : transport.title }
     private var timer: Timer?
@@ -259,8 +264,18 @@ final class RouterController: ObservableObject {
         }
         trackpad.startCapture()
         if !running { return }
+        let network = Self.activeNetworkSignature()
+        let changed = networkObserved
+        networkObserved = true
+        if network != networkSignature {
+            networkSignature = network
+            if transport == .direct {
+                retryCount = 0; nextRetry = .distantPast
+                if changed { stopProcesses(); status = "网络已变化，正在重新查找 Windows" }
+            }
+        }
         if engine == nil && lookup == nil && Date() >= nextRetry {
-            nextRetry = Date().addingTimeInterval(8)
+            nextRetry = Date().addingTimeInterval(2)
             status = "正在连接 \(peerHost)"
             discover()
         }
@@ -274,8 +289,7 @@ final class RouterController: ObservableObject {
         if transport == .bluetooth {
             guard !bluetoothAddress.isEmpty else { status = "请填写已配对 Windows 的蓝牙地址"; return }
             address = bluetoothAddress; prepareReceivers(ip: "127.0.0.1")
-        } else if Self.validIPv4(peerAddress) { verifyDirect(ip: peerAddress, refreshOnFailure: true) }
-        else { status = "请填写 Windows 的局域网 IP" }
+        } else { verifyDirect(ip: localPeerName, refreshOnFailure: true) }
     }
     private func sshArguments() -> [String] {
         let known = support.appendingPathComponent("Keys/known_hosts")
@@ -291,7 +305,7 @@ final class RouterController: ObservableObject {
     }
 
     private func verifyDirect(ip: String, refreshOnFailure: Bool, recoveringDirect: Bool = false) {
-        guard running, Self.validIPv4(ip) else { return }
+        guard running, ip == localPeerName || Self.validIPv4(ip) else { return }
         if !recoveringDirect { status = "正在直连 \(peerHost)" }
         let process = Process(), out = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
@@ -311,7 +325,8 @@ final class RouterController: ObservableObject {
                 } else if recoveringDirect {
                     return // Keep the working tunnel and input state during recovery probes.
                 } else if refreshOnFailure {
-                    self.waitForDirect()
+                    if Self.validIPv4(self.peerAddress) { self.verifyDirect(ip: self.peerAddress, refreshOnFailure: false) }
+                    else { self.waitForDirect() }
                 } else { self.waitForDirect() }
             }
         }
@@ -324,9 +339,32 @@ final class RouterController: ObservableObject {
 
     private func waitForDirect() {
         guard running else { return }
-        status = "局域网直连暂不可达，输入保留在 Mac；请检查 IP 和 Windows 状态"
+        retryCount += 1
+        let delay = retryCount <= 20 ? 2.0 : min(60.0, 2.0 + Double(retryCount - 20) * 2.0)
+        status = "局域网暂不可达，输入保留在 Mac；约 \(Int(delay)) 秒后重试"
         usingConfiguredSSH = false
-        nextRetry = Date().addingTimeInterval(15)
+        nextRetry = Date().addingTimeInterval(delay)
+    }
+
+    private static func activeNetworkSignature() -> String {
+        var head: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&head) == 0, let first = head else { return "" }
+        defer { freeifaddrs(first) }
+        var addresses: [String] = []
+        var cursor: UnsafeMutablePointer<ifaddrs>? = first
+        while let item = cursor {
+            if let address = item.pointee.ifa_addr, address.pointee.sa_family == UInt8(AF_INET),
+               item.pointee.ifa_flags & UInt32(IFF_UP) != 0,
+               item.pointee.ifa_flags & UInt32(IFF_LOOPBACK) == 0 {
+                var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(address, socklen_t(MemoryLayout<sockaddr_in>.size), &buffer,
+                               socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0 {
+                    addresses.append(String(cString: item.pointee.ifa_name) + "=" + String(cString: buffer))
+                }
+            }
+            cursor = item.pointee.ifa_next
+        }
+        return addresses.sorted().joined(separator: ";")
     }
 
     static func validIPv4(_ value: String) -> Bool {
@@ -571,6 +609,7 @@ final class RouterController: ObservableObject {
                         self.sendIPC("hello=" + line.dropFirst(16), connection)
                     } else if line == "connectionState=Connected" {
                         self.pendingDestination = nil
+                        self.retryCount = 0
                         self.connected = true; self.status = self.peerHost + " 已连接 · " + self.connectionRoute
                         self.clipboard.start(tokenURL: self.support.appendingPathComponent("trackpad-token"))
                         self.armControls()
@@ -675,7 +714,7 @@ final class RouterController: ObservableObject {
         writeState(request: "gesture")
     }
 
-    func reconnect() { stopProcesses(); running = true; desired = .mac; nextRetry = .distantPast; check() }
+    func reconnect() { stopProcesses(); running = true; desired = .mac; retryCount = 0; nextRetry = .distantPast; check() }
     func setTransport(_ value: RouterTransport) {
         guard transport != value else { return }
         stopProcesses(); transport = value; address = ""
