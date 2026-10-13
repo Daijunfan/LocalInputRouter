@@ -275,7 +275,9 @@ final class RouterController: ObservableObject {
             }
         }
         if engine == nil && lookup == nil && Date() >= nextRetry {
-            nextRetry = Date().addingTimeInterval(2)
+            retryCount += 1
+            let delay = retryCount <= 20 ? 2.0 : min(60.0, 2.0 + Double(retryCount - 20) * 2.0)
+            nextRetry = Date().addingTimeInterval(delay)
             status = "正在连接 \(peerHost)"
             discover()
         }
@@ -339,11 +341,8 @@ final class RouterController: ObservableObject {
 
     private func waitForDirect() {
         guard running else { return }
-        retryCount += 1
-        let delay = retryCount <= 20 ? 2.0 : min(60.0, 2.0 + Double(retryCount - 20) * 2.0)
-        status = "局域网暂不可达，输入保留在 Mac；约 \(Int(delay)) 秒后重试"
+        status = "局域网暂不可达，输入保留在 Mac；正在持续重试"
         usingConfiguredSSH = false
-        nextRetry = Date().addingTimeInterval(delay)
     }
 
     private static func activeNetworkSignature() -> String {
