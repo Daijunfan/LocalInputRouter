@@ -1,4 +1,7 @@
 #include <ApplicationServices/ApplicationServices.h>
+#include <Carbon/Carbon.h>
+#include <dispatch/dispatch.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -61,12 +64,55 @@ static CFMachPortRef createTap(CGEventTapLocation location,CGEventTapPlacement p
     if(!port)free(tap); // Successful contexts live with the backend process.
     return port;
 }
+
+// Deskflow's worker and AppKit otherwise race inside HIToolbox on macOS 26.
+// The backend has a live Cocoa main loop; keep all its TIS calls on that thread.
+static void inputSourcesOnMain(dispatch_block_t work) {
+    if(pthread_main_np())work();
+    else dispatch_sync(dispatch_get_main_queue(),work);
+}
+static CFArrayRef inputSourceList(CFDictionaryRef properties,Boolean includeAll) {
+    __block CFArrayRef result=NULL;
+    inputSourcesOnMain(^{result=TISCreateInputSourceList(properties,includeAll);});
+    return result;
+}
+static TISInputSourceRef currentKeyboardSource(void) {
+    __block TISInputSourceRef result=NULL;
+    inputSourcesOnMain(^{result=TISCopyCurrentKeyboardInputSource();});
+    return result;
+}
+static TISInputSourceRef currentKeyboardLayout(void) {
+    __block TISInputSourceRef result=NULL;
+    inputSourcesOnMain(^{result=TISCopyCurrentKeyboardLayoutInputSource();});
+    return result;
+}
+static TISInputSourceRef currentASCIILayout(void) {
+    __block TISInputSourceRef result=NULL;
+    inputSourcesOnMain(^{result=TISCopyCurrentASCIICapableKeyboardLayoutInputSource();});
+    return result;
+}
+static void *inputSourceProperty(TISInputSourceRef source,CFStringRef property) {
+    __block void *result=NULL;
+    inputSourcesOnMain(^{result=TISGetInputSourceProperty(source,property);});
+    return result;
+}
+static OSStatus selectInputSource(TISInputSourceRef source) {
+    __block OSStatus result;
+    inputSourcesOnMain(^{result=TISSelectInputSource(source);});
+    return result;
+}
 __attribute__((used,section("__DATA,__interpose")))
 static const struct {const void *replacement,*original;} hooks[]={
     {(void*)createTap,(void*)CGEventTapCreate},
     {(void*)hideCursor,(void*)CGDisplayHideCursor},
     {(void*)showCursor,(void*)CGDisplayShowCursor},
-    {(void*)associateCursor,(void*)CGAssociateMouseAndMouseCursorPosition}
+    {(void*)associateCursor,(void*)CGAssociateMouseAndMouseCursorPosition},
+    {(void*)inputSourceList,(void*)TISCreateInputSourceList},
+    {(void*)currentKeyboardSource,(void*)TISCopyCurrentKeyboardInputSource},
+    {(void*)currentKeyboardLayout,(void*)TISCopyCurrentKeyboardLayoutInputSource},
+    {(void*)currentASCIILayout,(void*)TISCopyCurrentASCIICapableKeyboardLayoutInputSource},
+    {(void*)inputSourceProperty,(void*)TISGetInputSourceProperty},
+    {(void*)selectInputSource,(void*)TISSelectInputSource}
 };
 __attribute__((constructor)) static void loaded(void) {
     const char message[]="Local input voice passthrough loaded\n";

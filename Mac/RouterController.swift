@@ -234,7 +234,7 @@ final class RouterController: ObservableObject {
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] _ in MainActor.assumeIsolated { self?.updateRDPPointer() } }
-        check()
+        DispatchQueue.main.async { [weak self] in self?.check() }
         writeState(request: "startup")
     }
 

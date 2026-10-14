@@ -54,14 +54,14 @@ libraries=deskflow/'Contents/Libraries'
 if libraries.exists():shutil.copytree(libraries,bundle/'Contents/Libraries',symlinks=True)
 shutil.copy2(deskflow/'Contents/MacOS/deskflow-core',helpers/'InputRouterDeskflow')
 sign(helpers/'InputRouterDeskflow',options='0')
-subprocess.run(['clang','-dynamiclib','-O2',str(source/'VoicePassthrough.c'),
-    '-framework','ApplicationServices','-o',str(helpers/'VoicePassthrough.dylib')],check=True)
+subprocess.run(['clang','-dynamiclib','-O2','-fblocks',str(source/'VoicePassthrough.c'),
+    '-framework','ApplicationServices','-framework','Carbon','-o',str(helpers/'VoicePassthrough.dylib')],check=True)
 sign(helpers/'VoicePassthrough.dylib')
 with (bundle/'Contents/Info.plist').open('wb') as f:
     plistlib.dump({'CFBundleIdentifier':'org.localinputrouter.app','CFBundleName':'Input Router',
         'CFBundleDisplayName':'输入路由','CFBundleExecutable':'InputRouter',
-        'CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.1.0',
-        'CFBundleVersion':'1','CFBundleIconFile':'AppIcon','NSHighResolutionCapable':True,
+        'CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.1.1',
+        'CFBundleVersion':'2','CFBundleIconFile':'AppIcon','NSHighResolutionCapable':True,
         'NSPrincipalClass':'NSApplication',
         'NSBluetoothAlwaysUsageDescription':'连接已配对的 Windows 蓝牙设备以转发键盘和触控板。'},f)
 sign(bundle)

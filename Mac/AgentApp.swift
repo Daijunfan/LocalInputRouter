@@ -17,8 +17,9 @@ final class RouterAgentDelegate: NSObject, NSApplicationDelegate {
     private var router: RouterController?
     private var panel: ToolWindow?
     func applicationDidFinishLaunching(_ notification: Notification) {
-        router = RouterController()
+        router = RouterController(autoStart: false)
         if !CommandLine.arguments.contains("--background") { showWindow() }
+        DispatchQueue.main.async { [weak self] in self?.router?.reconnect() }
     }
     private func showWindow() {
         guard let router else { return }
