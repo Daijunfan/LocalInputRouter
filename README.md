@@ -1,54 +1,89 @@
-# 输入路由（macOS） / Input Router for Mac
+# 输入路由 App
 
-<img src="Mac/AppIcon.png" alt="输入路由图标" width="112">
+1.10.1 在控制窗口增加「双轻触拖动间隔」滑块：0.01–0.30 秒，每次调整 0.01 秒，默认 0.20 秒；立即生效并保存到下次启动。间隔指第一次抬指到第二次落指的最长时间，调小可减少误拖动。
 
-这是一个**纯 Mac 应用**：用 Mac 键盘和触控板控制 Windows，不需要 Toolbox。Windows 上的 Deskflow 和 `Support/WindowsReceiver/` 只负责接收输入，没有 Windows 版应用或第二套操作界面。点击 Mac 应用按钮、按自定义快捷键，或选择三指轻点两次／四指轻点一次的触控板手势，可以在两台电脑间切换输入；连续按三次 Esc 会立即停止转发并返回 Mac。
+1.10.0 增加「连接共享实体桌面」：Mac 直接查看 DJF-Windows 的实体控制台，机箱上的 USB 键盘操作同一桌面。现有登录会话接回控制台，不注销 Windows 应用。画面在本 App 中显示，使用原有设备密钥自动认证，不弹密码框；仅主动点击连接时打开桌面窗口，启动与后台检查不打开窗口。使用方法及部署说明见 [Console/README.md](Console/README.md)。
 
-## 安装
+已在不接 HDMI 的主机上验证 1920×1080 实际画面解码、同一控制台会话和 USB HID 设备状态。接入实体显示器时后台停用虚拟显示器，拔出后启用；真实 USB 按键和 HDMI 插拔仍需现场验收。1.9.16 的未路由豆包语音已由用户确认成功，原语音代码保持不变。
 
-**Mac：**安装 [Deskflow](https://github.com/deskflow/deskflow) 1.27 和 Xcode Command Line Tools，运行 `python3 build.py`，打开 `build/Input Router.app`。构建脚本只从本机已安装的 Deskflow 复制运行组件；仓库不包含 Deskflow 二进制文件。应用会在当前 Mac 用户的数据目录中生成专用 SSH 密钥和会话令牌。首次使用需按 macOS 提示授予辅助功能和输入监控权限。
+1.9.16 修正未路由语音的应用激活时序：仅在主动按语音键后，临时语音客户端加入当前全屏空间并成为输入目标；确认激活完成后再交付原始触发键。结束后恢复 Windows App，路由目标始终保持 Mac。Fn／Option 组合键取消语音准备时也先恢复原应用。豆包快捷键、麦克风和全局语音配置不变。
 
-**Windows 接收端准备：**安装 [Deskflow for Windows](https://github.com/deskflow/deskflow) 1.27。用将实际接收键盘输入的 **Windows 管理员账户**打开管理员 PowerShell，运行：
+1.9.15 允许语音输入框在录音期间恢复被 RDP 窗口抢走的焦点，继续使用同一输入法客户端；未路由时仅在原来的 Windows App 仍处于前台时恢复。焦点生命周期仅记录事件和字符计数，不记录语音文字。
 
-```powershell
-./Support/WindowsReceiver/setup.ps1 -MacPublicKey 'ssh-ed25519 AAAA...'
+1.9.14 让未路由的 RDP 语音临时输入框复用正常路由的豆包 IME 接口，结束后恢复原输入法。Windows 语音接收端增加不含文字内容的接收计数、确认计数和错误回执；快捷键、麦克风及全局语音设置不变。
+
+1.9.13 修复异步关闭语音客户端时的输入框生命周期：输入上下文不持有客户端，因此关闭完成前保留输入框；切到 Windows 途中不因前台焦点通知关闭已准备的语音通道。豆包快捷键与全局语音配置不变。
+
+1.9.12 修复点击 Windows App 后未路由输入被接管的问题。普通键鼠、滚动、多指手势和自定义删除键只在明确路由到 Windows 后转发；点击或激活 `DJF-Windows` 不会启用路由。四指返回先释放输入，再关闭语音客户端并返回上一个 Mac 应用。已恢复的双轻触拖动、Command+X／Command+Backspace → Delete 保留。完整保留与验收清单见 [FEATURES.md](FEATURES.md)。
+
+未路由的 Windows App 仅在主动按下 Fn／右 Option 时准备临时语音客户端；保留真实按键，不在松开后补发触发键，临时选择已启用的豆包输入法、结束恢复原输入法，不更改豆包配置。识别文字沿用已有认证通道发送，结束后释放客户端。Unicode 设置继续用于普通中文输入，真实语音单独验收。
+
+1.9.10 保留 Windows App 对 DJF-Windows 的原生 RDP 指针通道，撤掉额外光标绘制，避免双鼠标与额外延迟。双轻触拖动生成的鼠标事件补齐原生点击计数。Windows App 的全屏模式设为 Immersive，顶部不显示 Mac 标题栏和菜单栏。豆包专用输入框在 RDP 点击后恢复焦点；录音开始时不重新选择输入源。2026-10-18 用户实际录音确认文字已成功输入 Windows。
+
+未启用路由、直接在 Windows App 中使用 Mac 豆包时，将 Connections → Keyboard Mode 设为 Unicode；这是 Windows App 支持本地 macOS 输入法所需的模式。该设置与路由的专用语音通道分开，说明见 [微软文档](https://learn.microsoft.com/zh-cn/windows-app/input-keyboard-mouse-touch-pen#键盘模式)。
+
+Windows 可以不接 HDMI，通过 Mac 远程使用。机箱 USB 键盘与远程画面共用时，请选择本 App 的「连接共享实体桌面」；传统 Windows App RDP 独立会话也继续保留。两种模式都不会因切换空间或点击窗口自动启用键鼠路由。
+
+1.9.7 修复局域网名称解析失败时跳过缓存 IP 的问题，直连恢复也依次尝试备用与缓存地址。Mac 端等待键鼠通道超过 20 秒会重新连接，后端日志保存在应用数据目录的 `backend.log`。
+
+1.9.6 修复 macOS 26 的输入源线程竞争：后台 Deskflow 对 TIS 输入法接口的调用统一交给其 Cocoa 主线程，避免系统强制终止后端。控制窗口先显示，再启动连接；Toolbox 对已运行的输入路由发送显式打开窗口请求。
+
+这是 Toolbox 管理的第一个独立 Mac App，并非 Toolbox 进程中的输入处理插件。
+
+完整 App 源码在 `Engine/`。独立构建：
+
+```bash
+python3 InputRouter/Engine/build.py
 ```
 
-这里粘贴 Mac 应用“Windows 设备与配对”里的完整 SSH 公钥。脚本编译并安装当前用户的 Windows 接收器，注册登录任务，启动 OpenSSH Server；SSH 防火墙新规则只接受本地子网。脚本最后显示 Windows 用户名、主机名、局域网 IPv4 和 SSH 主机指纹。其他 Mac 用户可以分别运行一次脚本，追加各自公钥；一台 Windows 同时只由一台 Mac 控制。
+Toolbox 显示 App 的原图标与真实运行圆点，点击启动后展示 `RouterView.swift`。`Client.swift` 只连接 App 的本机控制接口，输入路由、手势和语音始终在 `com.djf.inputrouter` App 的进程中执行。
 
-在 Mac 应用中填写 Windows 的 IPv4、用户名和主机名，保存后扫描 SSH 指纹。与 Windows 显示的 `SHA256:…` **逐字核对**，再点击信任。随后点击“重新连接”或“启用路由”。首次成功连接时，Mac 会通过已验证的 SSH 连接配置 Windows 接收器的会话令牌；令牌不会写进仓库或显示在界面。配对后局域网模式先用主机名的 `.local` 地址自动直连，失败时尝试已保存的 IPv4；家庭 Wi-Fi、公司内网或同一热点都可使用。Mac 网络地址变化时立即重新连接；失败后前 20 次每次约 2 秒重试，随后逐渐放慢，持续重试。若当前网络不能解析 Windows 主机名，仍可在应用中更新 IPv4。不需要公网、云账户或中转机。
+普通启动使用独立控制窗口；`--toolbox` 启动后台模式，保留原有授权和用户数据。退出 Toolbox 不会关闭该 App；在 Toolbox 中选择“退出 App”会正常退出输入路由并把输入交还 Mac。
 
-## 蓝牙
+当前关键代码的审核哈希记录在 `core-baseline.json`。Windows 原生触控接收端为向前兼容的 1.1.1，更新保留原有登录任务、认证与连接配置。正式安装后只保留 `/Applications/DJF 输入路由.app`，删除临时 App 副本及旧版应用产物。
 
-蓝牙使用同一套 SSH 公钥和主机指纹。先在局域网完成首次身份核对，在操作系统中配对两台电脑，然后在 Windows 重新运行设置脚本并指定 Mac 蓝牙地址：
+## 1.7.0 修复与优化
 
-```powershell
-./Support/WindowsReceiver/setup.ps1 -MacPublicKey 'ssh-ed25519 AAAA...' -MacBluetoothAddress 'AA:BB:CC:DD:EE:FF'
-```
+- 双轻触拖动保留原生点击到达前后的轻触记录，触点按下/释放直接进入识别器；不再等待网络队列。
+- 抬指、多指转换和切回 Mac 释放拖动，避免重复按下和手势残留；右 Option 中转状态随路由切换重置。
+- 单指移动和点击沿用指针通道。原生手势通道仅发送多指帧及完整的结束帧，保留缩放与三/四指手势。
+- 触控通道心跳超时后重连；应用启动阶段的退出请求排队到就绪后执行。
+- Toolbox 接收状态变化通知，忽略无关诊断计数的刷新，并按实际显示精度比较延迟。
 
-Windows 蓝牙桥只接受这个 Mac 地址，默认 RFCOMM 通道为 28，只转接 Windows 本机 SSH 端口。Mac 应用填写 Windows 的蓝牙地址及相同通道，选择“蓝牙直连”即可；Mac 的 Wi-Fi 可以继续保持连接。蓝牙速度通常低于 Wi-Fi。切换到另一台 Mac 时，需要在 Windows 更新允许的蓝牙地址。
+已通过事件时序回归、指针/滚动、拖动释放、多指结束帧、界面状态筛选测试。模拟的指针为主混合输入中，原生手势通道从1405个包降为503个包，数据量从97024字节降为48340字节。这是该通道的模拟负载结果，不代表整体操作延迟同幅降低。实际手势验证记录在项目根目录 verification.json。
 
-## 使用与接口
+1.6.4 已修复取消免按语音只发 Esc 按下、不发松开的错误，用户已确认 Mac 本地语音快捷键恢复。
 
-- 路由到 Windows 时，Command 对应 Windows 的 Ctrl，Control 对应 Windows 键，Option 对应 Alt。触控板单指指针、双指精细滚动和多指手势沿用原有输入通道。
-- 切换快捷键和紧急返回快捷键可在应用内修改；三次 Esc 为固定保底操作。退出应用时自动停止路由并把输入交还 Mac。
-- Mac 程序自身提供 CLI：`--status`、`--switch mac`、`--switch windows`、`--transport direct|bluetooth`、`--pointer-gain 1.50`、`--scroll-gain 1.50`、`--stop`、`--reconnect`。`--status` 返回 JSON，方便脚本读取。普通使用直接点击应用即可。
-- macOS 豆包语音实时转发需要 Mac 本身已配置豆包；没有豆包时，键盘、鼠标和触控板仍可使用。
+## 1.8.0 三指双击切换
 
-## 数据与安全边界
+内建触控板默认三指连续轻点两次切换 Mac/Windows；现在也可在应用中改选四指轻点一次。两种方式互斥，均要求短促且未移动；原键盘切换和 Esc×3 保留。原生触点监听独立于网络连接，因此暂停或掉线后仍可用所选手势请求重新连接。
 
-Mac 应用源码在 `Mac/`，构建输出写入 `build/`；Mac 密钥、主机指纹、会话令牌、用户设置和运行记录位于 `~/Library/Application Support/LocalInputRouter/`。Windows 所需的无界面接收端源码在 `Support/WindowsReceiver/`；它们编译到当前用户的 `%LOCALAPPDATA%\Programs\LocalInputRouter\`，运行数据位于 `%LOCALAPPDATA%\LocalInputRouter\`，蓝牙允许地址位于 `%ProgramData%\LocalInputRouter\`。这些运行目录均不属于公开仓库。
+Windows 的单次三指轻点延迟0.42秒确认，双击时取消该单次操作；三/四指滑动保持原接收端行为。Mac 的这组轻点由路由开关接管，识别窗口内拦截相关本机手势事件以避免查询弹窗。
 
-输入数据通过已验证指纹和公钥的 SSH 连接传输。Deskflow 与触控板/语音/剪贴板通道分别占用隧道内的本机回环端口 24900、24901、24903、24904；Windows 局域网中只需要 SSH 端口 22。锁屏后只要 Windows 保持登录和运行即可继续连接；休眠或关机期间无法接收。本开源版的自动 RDP 会话切换未进行通用主机验收，主要支持 Windows 的实体桌面会话。
+`ThreeFingerChecks.swift` 已检查错峰落指、结束帧、双击间隔、滑动/四指/长按排除。用户实测已确认双向切换成功。`TapDrag.requiredTaps` 默认1保持原 Windows 轻触拖动，独立 Mac 轻拖使用2；原指针、滚动、语音取消及拖动检查仍通过。
 
-## 构建与状态
+## 1.8.3 连接路径与断线状态
 
-macOS 26 的输入源接口在后台 Deskflow 的 Cocoa 主线程上执行，避免输入法线程竞争造成后端异常退出。控制窗口先显示，再开始连接。
+校园网模式优先验证实体 Windows 直连；直连失败且登记 IP 未变化时，不再重复验证同一失败地址，而是复用云主机导出的 `DJF-Windows` SSH 配置，包括其 ProxyJump。两条路径均校验同一个 Windows 主机指纹，使用原有身份密钥，并验证远端 hostname 为 DJF。界面显示当前实际路径。
 
-macOS 构建使用当前用户 Keychain 中生成的固定本地签名身份，更新时保持身份；签名私钥不在应用包或 Git 仓库中。原生输入安全逻辑（尤其三次 Esc 回退）沿用已有实现。
+当前局域网模式先使用 `djf.local` 在同一 Wi-Fi 或手机热点内直连；若主机名不能解析，可在界面填写备用 Windows IPv4。原有校园网地址登记与 SSH 跳板仅在局域网直连失败后使用。
 
-本次已在 Mac 上编译并打开独立应用，检查源码清单和签名。按用户要求，当前 Windows 主机不在身边，本次未进行 Windows 接收端或蓝牙的实机验收；公开仓库仅包含 Mac 应用源码与必要的接收端支持源码，不提供 Windows 版应用。
+使用配置路径期间，在输入留在 Mac 时每 30 秒检查直连；直连恢复后重新建立直连隧道。失败的恢复探测保持当前隧道，不打断 Windows 输入。蓝牙仍是独立的手动选项。
 
-Windows OpenSSH Server 的安装与管理员账户公钥要求见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh-server-configuration)。Deskflow 二进制及许可证由 [Deskflow 项目](https://github.com/deskflow/deskflow)提供；本仓库只发布本项目源码。
+停止或断线会清除原生手势“已连接”状态、心跳和旧延迟。1.8.3 已安装并验证原有签名身份、辅助功能权限、快捷键和倍率不变；通过已安装 App 验证 Mac→Windows→Mac 切换确认、Windows 模式隐藏本地光标、暂停后状态清除与重新连接。证据位于 artifacts/router-connect-install.json、router-connect-switch.json、router-connect-recovery.json。
 
-Copyright © 2026 Junfan Dai。本项目原创源码采用 GPL-2.0-or-later 许可证；仓库中的 `LICENSE` 包含 GPL 第 2 版全文，使用者也可以选择该许可证的后续版本。
+## 1.9.5 剪贴板可靠性修复
+
+Windows 剪贴板通过系统 `WM_CLIPBOARDUPDATE` 主动获知复制变化，100 毫秒轮询作为锁占用或通知漏发时的兜底。网络发送改为保序后台队列，避免 SSH 写入阻塞接收器的 UI/STA 消息循环；遇到暂时不可访问的剪贴板格式会继续尝试下一次变化。Mac 每 3 秒询问一次 Windows STA 的运行情况，15 秒未收到响应会将共享状态标为重连并自动重建剪贴板通道。独立复测覆盖 Windows 100 条有序消息、阻塞写入与 Mac 私有剪贴板双向模拟、25 条 Windows 连续消息、无回传循环和失活重连。未修改文件快传。
+
+## 1.9.0 双向剪贴板
+
+输入路由连接后自动共享文字、PNG 图片、HTML 和 RTF 富文本；不需要切换输入目标，也不使用文件快传的发送按钮。初次连接及重新连接以 Mac 当前内容为准，替换 Windows 原有的所有剪贴板格式；Mac 为空时 Windows 也被清空。之后两端的复制变化双向同步。文件复制不在此功能范围内。
+
+`Engine/ClipboardBridge.swift` 与 `Clipboard/ClipboardReceiver.cs` 通过同一 SSH 隧道的独立回环端口 24804 传送，复用现有每用户认证。Windows 接收器在 djf 的交互会话中运行，登录任务为 DJF-Windows-Clipboard，无可见窗口。复制的内容只保留在当前剪贴板及同步内存，不写日志或磁盘历史。PNG 转码在独立队列执行，轮询只在剪贴板变化时读取内容。
+
+Deskflow 自己的剪贴板传输保持禁用。键鼠客户端就绪后才初始化共享；其启动时带 Deskflow Ownership 标记的内部清空不会被同步回 Mac，而会恢复最后同步的内容。共享内容带独立标记，避免两端重复回传。暂停／退出路由关闭共享连接，但保留最后一次剪贴板内容。
+
+Windows 部署：先将 ClipboardReceiver.cs 放到用户 LocalAppData/DJF-Windows，再执行 Clipboard/install.ps1。安装脚本复用已有语音任务的有效登录身份和设置，并降为普通权限。
+
+已安装 1.9.0，并完成两端真实系统剪贴板的中文／Emoji、PNG 像素与透明度、HTML／RTF、空内容、首次 Mac 优先、防回传循环验证；Windows RichTextBox 的实际富文本粘贴及 Mac RTF 解析通过。结果在 artifacts/clipboard-live-result.json、clipboard-extra-result.json。`Tests/ClipboardChecks.swift` 使用隔离的私有剪贴板测试格式转换，不接触用户剪贴板。

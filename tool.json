@@ -1,0 +1,9 @@
+{
+  "id": "input-router",
+  "name": "输入路由",
+  "description": "用 Mac 键盘与触控板控制 DJF-Windows",
+  "icon": "cursorarrow",
+  "engineBundleIdentifier": "com.djf.inputrouter",
+  "application": "/Applications/DJF 输入路由.app",
+  "controlNotification": "com.djf.inputrouter.control"
+}
