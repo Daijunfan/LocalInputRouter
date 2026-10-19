@@ -17,7 +17,7 @@ $options = @(
     'SET_LOOPBACKONLY=1', 'VALUE_OF_LOOPBACKONLY=1',
     'SET_ALLOWLOOPBACK=1', 'VALUE_OF_ALLOWLOOPBACK=1',
     'SET_ACCEPTHTTPCONNECTIONS=1', 'VALUE_OF_ACCEPTHTTPCONNECTIONS=0',
-    'SET_RFBPORT=1', 'VALUE_OF_RFBPORT=24805',
+    'SET_RFBPORT=1', 'VALUE_OF_RFBPORT=24905',
     'SET_BLOCKLOCALINPUT=1', 'VALUE_OF_BLOCKLOCALINPUT=0',
     'SET_BLOCKREMOTEINPUT=1', 'VALUE_OF_BLOCKREMOTEINPUT=0',
     'SET_LOCALINPUTPRIORITY=1', 'VALUE_OF_LOCALINPUTPRIORITY=0',
@@ -34,7 +34,7 @@ $password = $null
 if ($process.ExitCode -notin 0,3010) { throw "TightVNC installation failed: $($process.ExitCode)" }
 Copy-Item (Join-Path $source 'ConsoleDesktop.ps1') (Join-Path $root 'ConsoleDesktop.ps1') -Force
 $config = Get-ItemProperty 'HKLM:\SOFTWARE\TightVNC\Server'
-if ($config.LoopbackOnly -ne 1 -or $config.BlockLocalInput -ne 0 -or $config.RfbPort -ne 24805) {
+if ($config.LoopbackOnly -ne 1 -or $config.BlockLocalInput -ne 0 -or $config.RfbPort -ne 24905) {
     throw 'Console desktop configuration did not match the requested settings.'
 }
 Get-Service tvnserver | Select-Object Name,Status | ConvertTo-Json -Compress

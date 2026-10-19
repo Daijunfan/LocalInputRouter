@@ -6,17 +6,21 @@ import subprocess
 
 installed = Path.home() / '.local/share/djf-windows/rdp-direct-tunnel.py'
 paths = [installed, Path.home() / 'develop/MyWin/rdp-direct-tunnel.py']
-old = "'-L', '127.0.0.1:23389:127.0.0.1:3389', 'djf@' + address"
-new = "'-L', '127.0.0.1:23389:127.0.0.1:3389',\n    '-L', '127.0.0.1:24805:127.0.0.1:24805', 'djf@' + address"
+rdp = "'-L', '127.0.0.1:23389:127.0.0.1:3389',"
+old = "'-L', '127.0.0.1:24805:127.0.0.1:24805',"
+new = "'-L', '127.0.0.1:24905:127.0.0.1:24905',"
 for path in paths:
     if not path.exists():
         if path == installed:
             raise SystemExit('The existing DJF-Windows desktop tunnel is not installed.')
         continue
     text = path.read_text()
-    if '127.0.0.1:24805:127.0.0.1:24805' not in text:
-        if old not in text:
+    updated = text.replace(old, new)
+    if new not in updated:
+        if rdp not in updated:
             raise SystemExit(f'The existing desktop tunnel needs review: {path}')
-        path.write_text(text.replace(old, new))
+        updated = updated.replace(rdp, rdp + '\n    ' + new, 1)
+    if updated != text:
+        path.write_text(updated)
 subprocess.run(['launchctl', 'kickstart', '-k', f'gui/{os.getuid()}/com.djf.windows-rdp'], check=True)
-print('Console video uses the existing DJF-Windows desktop tunnel.')
+print('Console video uses loopback port 24905; RDP remains on 23389.')

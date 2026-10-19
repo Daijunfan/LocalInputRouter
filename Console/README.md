@@ -6,11 +6,13 @@
 
 Windows App 的 RDP 独立会话继续保留。机箱 USB 键盘也可通过独立 [实体键盘组件](../Windows/README.md) 输入到当前 RDP 桌面；没有 RDP 时保留本地控制台输入。重新连接传统 RDP 会把用户桌面接回 RDP 会话。
 
-画面使用已有独立桌面 SSH 隧道的回环端口 24805，独立于键鼠路由暂停、退出及安全输入状态。Windows TightVNC 仅监听 127.0.0.1，启用独立 VNC 认证，允许本地键盘输入，不添加防火墙入口。认证密码从已有设备密钥派生，仅用于此通道，不使用 Windows 登录密码。
+画面使用已有独立桌面 SSH 隧道的回环端口 24905，Windows TightVNC 也仅监听 127.0.0.1:24905；RDP 仍使用 Mac 端口 23389。24805 留给文件快传的本机服务及反向隧道，避免视频转发绑定失败导致整个 RDP 隧道退出。桌面隧道独立于键鼠路由暂停、退出及安全输入状态。VNC 启用独立认证、允许本地键盘输入，不添加防火墙入口；认证密码从已有设备密钥派生，不使用 Windows 登录密码。
 
 无 HDMI 时使用已签名的 Virtual Display Driver 提供 1920×1080 画面。`DJF-Windows-Console-Display` 后台任务依据显示器的父适配器排除虚拟与 RDP 显示器：实体显示器接入时停用新增虚拟设备，移除后启用。只管理安装时确认的虚拟设备，不修改显卡驱动、睡眠或全局 PowerShell 策略。
 
 源码与部署：`install.ps1` 安装官方签名 TightVNC；`ConsoleDesktop.ps1` 校验 DJF 主机并连接现有控制台；`install-display.ps1` 部署签名显示驱动；`install-display-agent.ps1` 安装自动显示任务；`install-macos.py` 为已有独立桌面隧道增加画面转发。设备认证配置沿用现有每用户目录。PowerShell 的 RemoteSigned 仅作用于这些子进程。
+
+从旧端口升级时，在 DJF-Windows 以管理员权限执行 `migrate-video-port.ps1`，然后在 Mac 执行 `python3 Console/install-macos.py` 并安装 1.10.2 App。迁移只改已有 VNC 服务的监听端口，保留认证和输入配置；无需重启 Windows。Mac 安装脚本兼容旧视频转发与仅有 RDP 的配置，重复执行不会增加重复转发。
 
 查看器复用项目已有 noVNC 1.7.0，保留 MPL-2.0 许可。此副本不请求客户端光标编码，由 Windows 在画面中绘制一个光标，避免已路由时 Mac 光标被冻结而远端光标消失。构建 JS：
 

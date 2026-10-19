@@ -21,7 +21,7 @@ enum RemoteDesktopMode: String {
 }
 
 enum ConsoleDesktop {
-    static let port = 24805
+    static let port = 24905
     @MainActor private static var viewer: ConsoleWindow?
     @MainActor private static var probe: ConsoleWindow?
     @MainActor static func checkConnection(_ completed: @escaping (Bool) -> Void) {
