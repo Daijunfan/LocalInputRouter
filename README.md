@@ -22,7 +22,7 @@
 
 未启用路由、直接在 Windows App 中使用 Mac 豆包时，将 Connections → Keyboard Mode 设为 Unicode；这是 Windows App 支持本地 macOS 输入法所需的模式。该设置与路由的专用语音通道分开，说明见 [微软文档](https://learn.microsoft.com/zh-cn/windows-app/input-keyboard-mouse-touch-pen#键盘模式)。
 
-Windows 可以不接 HDMI，通过 Mac 远程使用。机箱 USB 键盘与远程画面共用时，请选择本 App 的「连接共享实体桌面」；传统 Windows App RDP 独立会话也继续保留。两种模式都不会因切换空间或点击窗口自动启用键鼠路由。
+Windows 可以不接 HDMI，通过 Mac 远程使用。机箱 USB 键盘由独立 Windows 组件跟随现有 djf 会话：RDP 已连接时输入到 RDP 桌面，没有 RDP 时保留 Windows 本地输入。共享实体桌面入口也继续保留。两种模式都不会因切换空间或点击窗口自动启用 Mac 键鼠路由。实现与验证说明见 [Windows/README.md](Windows/README.md)。
 
 1.9.7 修复局域网名称解析失败时跳过缓存 IP 的问题，直连恢复也依次尝试备用与缓存地址。Mac 端等待键鼠通道超过 20 秒会重新连接，后端日志保存在应用数据目录的 `backend.log`。
 
