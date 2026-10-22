@@ -68,17 +68,36 @@ import Carbon
         print("PASS: native RDP speech prepares before original modifiers, never replays them; chords, other apps and unavailable voice remain native")
         control.setDeleteEnabled(true)
         var deletes = 0; control.onDelete = { deletes += 1 }
+        var viewerFocused = true
+        control.canDeleteInViewer = { viewerFocused }
         for routed in [false, true] {
             control.confirm(routed ? .windows : .mac); control.setRDPPointer(true)
             for key in [kVK_ANSI_X, kVK_Delete] {
-                precondition(handle(key, .keyDown, .maskCommand) == !routed)
-                precondition(handle(key, .keyUp) == !routed)
+                let mapped = routed || key == kVK_ANSI_X
+                precondition(handle(key, .keyDown, .maskCommand) == !mapped)
+                precondition(handle(key, .keyUp) == !mapped)
             }
         }
-        precondition(deletes == 2)
-        control.confirm(.mac); control.setRDPPointer(false)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 2)
-        print("PASS: Command delete aliases require explicit Windows routing; unrouted RDP and Mac apps retain native Cut")
+        precondition(deletes == 3)
+        control.confirm(.mac); control.setRDPPointer(false); viewerFocused = false
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 3)
+        control.setRDPPointer(true)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 3, "A stale viewer cache must not delete in another app")
+        control.setRDPPointer(false); viewerFocused = true
+        precondition(!handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4, "A newly focused DJF viewer must not wait for the pointer cache")
+        precondition(!handle(kVK_ANSI_X, .keyUp))
+        control.setRDPPointer(true); control.setDeleteEnabled(false)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
+        control.setDeleteEnabled(true); control.setVoiceCapture(true)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
+        control.setVoiceCapture(false)
+        for flags in [CGEventFlags.maskControl, [.maskCommand, .maskShift], [.maskCommand, .maskAlternate]] {
+            precondition(handle(kVK_ANSI_X, .keyDown, flags) && deletes == 4)
+        }
+        control.configure(available: false, pid: 0)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
+        control.configure(available: true, pid: getpid())
+        print("PASS: Command delete aliases work in routed and unrouted DJF viewers; other apps, unavailable receivers, speech and other chords remain native")
 
         control.setRDPPointer(true); control.setNativeGestures(true); control.setMacScroll(true)
         control.setPointerGain(10)

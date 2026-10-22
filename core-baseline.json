@@ -1,8 +1,8 @@
 {
-  "InputControl.swift": "4e8fa27bd405a325a75f574fd551492aa28844c6bfa8288b9b2db966975e8d10",
+  "InputControl.swift": "4a48a5a81f0cf760182bb35c6c3a3bacbcd1625642fbcfa3e6a4697aa867111b",
   "TapDrag.swift": "c1bf74782619eb92fadbe124f61666b731309efdab3e386acac817e39e08bf77",
   "LocalCursor.swift": "e78de3fa7a9704d0d990db36bb03832b2ac7e3917db201139d1d770184486bbb",
-  "TrackpadBridge.swift": "ac7ce0431af19b677a1e6921c7a2065676677b0b107cac0997542ffe090ec288",
+  "TrackpadBridge.swift": "97ad60fa38eb165e38c594a4aff09a6164bef479be9c08692f421ffaf0c612dd",
   "VoiceBridge.swift": "d42f902d22d60cf4e95cb7d5556a345aa01446860d1115018eaac949b672a50b",
   "VoiceTransport.swift": "cefc456fd3354f16283b5b17a3fdceed9324c5d9f4474d273d9562dc4e5046a1",
   "VoiceTextView.swift": "597651e90a137f6e4fb19273a15db1b95cf03be8fa552e39bb962dd9e3a8e5a7",

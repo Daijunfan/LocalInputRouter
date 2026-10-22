@@ -112,7 +112,7 @@ final class TrackpadBridge: @unchecked Sendable {
     }
     func delete() {
         queue.async {
-            guard self.routing, self.ready, self.deleteKey else { return }
+            guard self.ready, self.deleteKey else { return }
             self.send(["type": "delete"])
         }
     }

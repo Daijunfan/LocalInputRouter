@@ -131,6 +131,15 @@ final class RouterController: ObservableObject {
         trackpad.onScrollReady = { ready in inputControl.setMacScroll(ready) }
         trackpad.onDeleteReady = { ready in inputControl.setDeleteEnabled(ready) }
         controls.onDelete = { touchBridge.delete() }
+        controls.canDeleteInViewer = { [weak self] in
+            DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    guard let self else { return false }
+                    self.updateRDPPointer()
+                    return self.connected && self.destination == .mac && self.rdpPointer && !self.voice.isPrepared
+                }
+            }
+        }
         controls.onScroll = { x, y, begin in touchBridge.scroll(x: x, y: y, begin: begin) }
         voice.onActive = { [weak self] active in
             if !active, let self, self.destination == .mac, self.voice.isActive { return }

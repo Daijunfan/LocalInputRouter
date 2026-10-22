@@ -100,6 +100,7 @@ final class InputControl: @unchecked Sendable {
     var onVoicePrepare: ((CGKeyCode) -> Bool)?
     var onVoiceDiscard: (() -> Void)?
     var onDelete: (() -> Void)?
+    var canDeleteInViewer: (() -> Bool)?
     var isInstalled: Bool { tap != nil && guardTap != nil }
     var recoveryReason: String {
         lock.lock(); defer { lock.unlock() }; return lastRecovery
@@ -476,13 +477,15 @@ final class InputControl: @unchecked Sendable {
         let escape = emergencyShortcut.matches(key, flags: event.flags)
         guard type == .keyDown && (toggle || escape) else {
             let routeVoice = speechTarget && voiceCapture && (type == .keyDown || type == .keyUp)
-            let delete = remote && deleteEnabled && !voiceCapture && type == .keyDown
+            let delete = available && deleteEnabled && !voiceCapture && type == .keyDown
                 && event.flags.intersection(RouterShortcut.modifierMask) == .maskCommand
                 && (key == kVK_ANSI_X || key == kVK_Delete)
-            if delete { swallowed.insert(key) }
             lock.unlock()
             if routeVoice { if let copy = event.copy() { onVoiceEvent?(copy) }; return MacVoiceEvents.local(event) }
-            if delete { onDelete?(); return nil }
+            if delete && (remote || (key == kVK_ANSI_X && canDeleteInViewer?() == true)) {
+                lock.lock(); swallowed.insert(key); lock.unlock()
+                onDelete?(); return nil
+            }
             return Unmanaged.passUnretained(event)
         }
         if swallowed.contains(key) || event.getIntegerValueField(.keyboardEventAutorepeat) != 0 {
