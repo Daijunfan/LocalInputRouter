@@ -70,12 +70,16 @@ import Network
             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         for y in 0..<2 { for x in 0..<3 { image.setColor(NSColor(calibratedRed: 0.2, green: 0.6, blue: 0.9, alpha: x == 0 ? 0.5 : 1), atX: x, y: y) } }
         let png = image.representation(using: .png, properties: [:])!
-        MacClipboard.apply(["id": "image-fixture", "png": png.base64EncodedString()], to: board)
+        send(["clipboard": ["id": "image-fixture", "png": png.base64EncodedString()]])
+        check(until({ board.data(forType: .png) == png }), "remote PNG is applied through the shared clipboard connection")
         check(board.string(forType: .string) == nil, "image replaces old text")
         check(board.data(forType: .png) == png, "original PNG is preserved")
+        let declared = board.pasteboardItems?.first?.types ?? []
+        check(declared.contains(.png) && declared.contains(.tiff), "PNG and TIFF must both be explicitly declared, not synthesized during paste")
         let tiff = board.data(forType: .tiff).flatMap(NSBitmapImageRep.init(data:))
         check(tiff?.pixelsWide == 3 && tiff?.pixelsHigh == 2, "image exposes a native TIFF representation for paste previews")
         check(tiff?.colorAt(x: 0, y: 0)?.alphaComponent ?? 0 > 0.45, "native image keeps alpha")
+        check(tiff?.colorAt(x: 0, y: 0)?.alphaComponent ?? 1 < 0.55, "native image keeps translucent pixels")
         bridge.stop(); peer?.cancel(); listener.cancel(); board.releaseGlobally()
         try? FileManager.default.removeItem(at: token)
         print(failures.isEmpty ? "PASS: clipboard ordering, echo isolation and native PNG/TIFF image paste" : "FAILED: \(failures.count) clipboard checks")

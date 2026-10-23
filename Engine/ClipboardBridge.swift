@@ -195,7 +195,11 @@ enum MacClipboard {
             if let value = packet[key] { item.setString(value, forType: type) }
         }
         for (key, type) in [("rtf", NSPasteboard.PasteboardType.rtf), ("png", .png)] {
-            if let value = packet[key], let bytes = Data(base64Encoded: value) { item.setData(bytes, forType: type) }
+            if let value = packet[key], let bytes = Data(base64Encoded: value) {
+                item.setData(bytes, forType: type)
+                // Explicit native TIFF prevents Electron from exposing synthesized TIFF bytes as image/png.
+                if type == .png, let tiff = NSBitmapImageRep(data: bytes)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
+            }
         }
         if let id = packet["id"] { item.setString(id, forType: marker) }
         board.clearContents(); board.writeObjects([item])
