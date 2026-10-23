@@ -23,7 +23,7 @@ static class Receiver {
    try {
     string token=File.ReadAllText(Path.Combine(directory,"trackpad.token")).Trim();
     var listener=new TcpListener(IPAddress.Loopback,24801);listener.Start();
-    Status(new{ready=true,connected=false,pid=Process.GetCurrentProcess().Id,version="1.1.2",commandBackspace="Delete",commandX="Delete",threeFingerHorizontal="desktop"});
+    Status(new{ready=true,connected=false,pid=Process.GetCurrentProcess().Id,version="1.1.3",commandBackspace="Delete",commandX="Delete",threeFingerHorizontal="desktop"});
     while(true)using(var client=listener.AcceptTcpClient()) {
      client.NoDelay=true;client.ReceiveTimeout=2500;
      using(var reader=new StreamReader(client.GetStream(),Encoding.UTF8,false,4096,true))
@@ -51,7 +51,7 @@ static class Receiver {
           default:throw new InvalidDataException("Unknown input message");
          }
          if(DateTime.UtcNow>=nextStatus) {
-          Status(new{ready=true,connected=true,pid=Process.GetCurrentProcess().Id,version="1.1.2",frames=pad.Frames,maxContacts=pad.MaxContacts,macScroll=hello.macScroll,scrollEvents=scroll.Events,wheelX=scroll.WheelX,wheelY=scroll.WheelY,threeFingerDesktopFrames=desktop.MappedFrames,deleteRemaps=keyboard.Remaps});
+          Status(new{ready=true,connected=true,pid=Process.GetCurrentProcess().Id,version="1.1.3",frames=pad.Frames,maxContacts=pad.MaxContacts,macScroll=hello.macScroll,scrollEvents=scroll.Events,wheelX=scroll.WheelX,wheelY=scroll.WheelY,threeFingerDesktopFrames=desktop.MappedFrames,deleteRemaps=keyboard.Remaps});
           nextStatus=DateTime.UtcNow.AddSeconds(1);
          }
         }

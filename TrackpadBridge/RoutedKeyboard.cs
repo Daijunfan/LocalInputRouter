@@ -65,7 +65,7 @@ sealed class RoutedKeyboard : IDisposable {
  }
  public void Delete() {
   var controls=new List<ushort>();
-  foreach(ushort key in new ushort[]{0xA2,0xA3})if((GetAsyncKeyState(key)&0x8000)!=0)controls.Add(key);
+  foreach(ushort key in new ushort[]{0xA2,0xA3,0x5B,0x5C})if((GetAsyncKeyState(key)&0x8000)!=0)controls.Add(key);
   if(!SendDelete(controls.ToArray()))throw new Win32Exception(Marshal.GetLastWin32Error());
  }
  bool SendDelete(ushort[] controls) {
@@ -78,9 +78,16 @@ sealed class RoutedKeyboard : IDisposable {
   return new Input{type=1,keyboard=new Keyboard{key=key,flags=flags,extra=new UIntPtr(OwnTag)}};
  }
  public static Input[] DeleteInputs(ushort[] controls) {
-  var result=new List<Input>();foreach(var ctrl in controls)result.Add(Press(ctrl,true));
+  var result=new List<Input>();
+  foreach(var ctrl in controls) {
+   if(ctrl==0x5B || ctrl==0x5C)result.AddRange(ScreenshotReleaseInputs(ctrl));
+   else result.Add(Press(ctrl,true));
+  }
   result.Add(Press(0x2E,false));result.Add(Press(0x2E,true));
-  foreach(var ctrl in controls)result.Add(Press(ctrl,false));return result.ToArray();
+  foreach(var ctrl in controls)result.Add(Press(ctrl,false));
+  // Restoring a held Mac Command/Win must not turn its eventual release into Start.
+  if(Array.Exists(controls,key=>key==0x5B || key==0x5C)){result.Add(Press(0xE8,false));result.Add(Press(0xE8,true));}
+  return result.ToArray();
  }
  public static Input[] ScreenshotReleaseInputs(ushort windowsKey) {
   // Unassigned VK_E8 masks an otherwise bare Win release, without typing a character.
