@@ -111,6 +111,10 @@ import Network
                 self.encoding = false
                 if self.board.changeCount != count { self.sendCurrent(c, initial: initial); return }
                 let payload = packet.filter { $0.key != "id" }
+                if captured.needsNativeImage && packet["png"] != nil {
+                    MacClipboard.apply(packet, to: self.board)
+                    self.appliedID = packet["id"] ?? ""; self.lastChange = self.board.changeCount
+                }
                 if !initial && payload == self.lastPayload { return }
                 if let data, self.write(data, c) {
                     self.pendingID = packet["id"] ?? ""
@@ -173,15 +177,21 @@ import Network
 
 enum MacClipboard {
     static let marker = NSPasteboard.PasteboardType("com.djf.inputrouter.clipboard-id")
-    struct Captured { var packet: [String: String]; let tiff: Data? }
+    struct Captured { var packet: [String: String]; let tiff: Data?; let needsNativeImage: Bool }
     static func capture(_ board: NSPasteboard) -> Captured {
         var packet = ["id": UUID().uuidString]
         if let text = board.string(forType: .string) { packet["text"] = text }
         if let html = board.string(forType: .html) { packet["html"] = html }
         if let rtf = board.data(forType: .rtf) { packet["rtf"] = rtf.base64EncodedString() }
+        let types = board.pasteboardItems?.flatMap(\.types) ?? []
         let png = board.data(forType: .png)
-        if let png { packet["png"] = png.base64EncodedString() }
-        return Captured(packet: packet, tiff: png == nil ? board.data(forType: .tiff) : nil)
+        let validPNG = png?.starts(with: [137,80,78,71,13,10,26,10]) == true
+        if validPNG, let png { packet["png"] = png.base64EncodedString() }
+        // A native RDP item can advertise PNG while returning TIFF bytes, or
+        // leave TIFF implicit. Materialize both locally, including duplicate
+        // images that do not need another network transfer.
+        let native = types.contains(.png) && (!types.contains(.tiff) || !validPNG) && !types.contains(.fileURL)
+        return Captured(packet: packet, tiff: validPNG ? nil : (png ?? board.data(forType: .tiff)), needsNativeImage: native)
     }
     static func encode(_ captured: Captured) -> [String: String] {
         var packet = captured.packet

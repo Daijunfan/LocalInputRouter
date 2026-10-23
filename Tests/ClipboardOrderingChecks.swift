@@ -80,6 +80,32 @@ import Network
         check(tiff?.pixelsWide == 3 && tiff?.pixelsHigh == 2, "image exposes a native TIFF representation for paste previews")
         check(tiff?.colorAt(x: 0, y: 0)?.alphaComponent ?? 0 > 0.45, "native image keeps alpha")
         check(tiff?.colorAt(x: 0, y: 0)?.alphaComponent ?? 1 < 0.55, "native image keeps translucent pixels")
+
+        // Native RDP can replace the same image's representations without a new
+        // payload. Repair the local item even when network deduplication skips it.
+        let pngOnly=NSPasteboardItem();pngOnly.setData(png,forType:.png)
+        board.clearContents();board.writeObjects([pngOnly])
+        check(until({ board.pasteboardItems?.first?.types.contains(.tiff) == true }), "PNG-only source gains explicit native image representations even for duplicate content")
+
+        // Match the real Windows App capture: text, PNG and TIFF are separate
+        // items, and the item named PNG actually contains TIFF bytes.
+        let imageText=NSPasteboardItem();imageText.setString("",forType:.string)
+        let mislabeled=NSPasteboardItem();mislabeled.setData(image.tiffRepresentation!,forType:.png)
+        let nativeTIFF=NSPasteboardItem();nativeTIFF.setData(image.tiffRepresentation!,forType:.tiff)
+        board.clearContents();board.writeObjects([imageText,mislabeled,nativeTIFF])
+        let encoded=MacClipboard.encode(MacClipboard.capture(board))
+        let signature=Data([137,80,78,71,13,10,26,10])
+        let encodedPNG=encoded["png"].flatMap { Data(base64Encoded:$0) }
+        check(encodedPNG?.prefix(8) == signature, "PNG-labelled TIFF must become a real PNG before transmission")
+        check(until({ board.data(forType:.png)?.prefix(8) == signature }), "local paste receives real PNG bytes, not a TIFF labelled as PNG")
+        check(board.pasteboardItems?.count == 1, "native image representations share one pasteboard item")
+
+        let macScreenshot=NSPasteboardItem();macScreenshot.setData(image.tiffRepresentation!,forType:.tiff)
+        board.clearContents();board.writeObjects([macScreenshot]);wait(0.25)
+        check(board.pasteboardItems?.first?.types == [.tiff], "working native Mac TIFF-only screenshots stay untouched")
+        let imageFile=NSPasteboardItem();imageFile.setData(png,forType:.png);imageFile.setString("file:///tmp/inputrouter-owned-image-fixture.png",forType:.fileURL)
+        board.clearContents();board.writeObjects([imageFile]);wait(0.25)
+        check(board.pasteboardItems?.first?.types.contains(.fileURL) == true, "normalizing an image must not strip native file-copy metadata")
         bridge.stop(); peer?.cancel(); listener.cancel(); board.releaseGlobally()
         try? FileManager.default.removeItem(at: token)
         print(failures.isEmpty ? "PASS: clipboard ordering, echo isolation and native PNG/TIFF image paste" : "FAILED: \(failures.count) clipboard checks")

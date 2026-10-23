@@ -1,5 +1,7 @@
 # 输入路由 App
 
+1.10.9 修正 Windows App 来源图片的格式：读取剪贴板时确认 PNG 文件头，将误标为 PNG 的 TIFF 实际编码成 PNG，并在本机明确写入 PNG 与 TIFF。相同图片被 RDP 再次提供时也修正本机格式，避免网络去重跳过修复；本机原生 TIFF 截图和带文件地址的复制内容保持原样。1.10.8 的修饰键互换与删除行为保留。
+
 1.10.8 统一已路由和未路由 DJF-Windows 窗口的修饰键：左右 Command → Windows Ctrl，左右 Control → Windows Win；字母 X 保持剪切，Command+⌫（Mac 删除键）发送 Delete。未路由组合键通过已有认证通道保序发送，RDP 重复的 Ctrl/Win 事件被过滤；普通 Unicode/中文、豆包语音和本机 Command+1/2 截图保留原有路径。
 
 1.10.7 补齐未路由时 DJF-Windows 窗口中的 Command+⌫（Mac 删除键）→ Delete，与 Command+X 使用同一认证删除通道；按下与松开均被接管。保留其他 Mac 窗口、录音期间及额外修饰键组合的原始用途。
