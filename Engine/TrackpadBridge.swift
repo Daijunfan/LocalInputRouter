@@ -15,6 +15,9 @@ final class TrackpadBridge: @unchecked Sendable {
     private var running = false, ready = false, routing = false
     private var macScroll = false, scrollEvents = 0
     private var deleteKey = false
+    private var localScreenshots = false
+    private var screenshotReply: (String, DispatchSemaphore)?
+    private var screenshotAcks = 0
     private var peakFingers = 0, touchStart = 0.0, maxDistance = 0.0
     private var starts: [Int32: (Double, Double)] = [:]
     private var sentFrames = 0, maximumContacts = 0
@@ -90,6 +93,7 @@ final class TrackpadBridge: @unchecked Sendable {
             send(["type": "reset"])
             connection?.cancel(); connection = nil
             timer?.cancel(); timer = nil; ready = false; macScroll = false; deleteKey = false; buffer.removeAll(); clearGesture()
+            localScreenshots = false; screenshotReply?.1.signal(); screenshotReply = nil
             pingStarted = nil; roundTrips.removeAll()
             onScrollReady?(false)
             onDeleteReady?(false)
@@ -116,12 +120,25 @@ final class TrackpadBridge: @unchecked Sendable {
             self.send(["type": "delete"])
         }
     }
+    func prepareLocalScreenshot() {
+        let request = UUID().uuidString, reply = DispatchSemaphore(value: 0)
+        queue.async {
+            guard self.ready, self.localScreenshots else { reply.signal(); return }
+            self.screenshotReply = (request, reply)
+            self.send(["type": "localScreenshot", "request": request])
+        }
+        // The HID worker waits briefly so RDP's focus-loss release cannot race
+        // ahead of the receiver's mask. Mac Command events always pass unchanged.
+        _ = reply.wait(timeout: .now() + 0.1)
+        queue.async { if self.screenshotReply?.0 == request { self.screenshotReply = nil } }
+    }
     var snapshot: [String: Any] {
         queue.sync { ["ready": ready, "frames": sentFrames, "maxContacts": maximumContacts,
                       "width": width, "height": height, "capturedFrames": capturedFrames, "capturedContacts": capturedContacts, "macScroll": macScroll, "scrollEvents": scrollEvents,
                       "roundTripMedianMs": roundTrips.isEmpty ? -1 : roundTrips.sorted()[roundTrips.count / 2],
                       "roundTripMaxMs": roundTrips.max() ?? -1, "skippedSingleFingerFrames": skippedFrames,
-                      "captureActive": capturing, "doubleTapToggles": tapToggles, "deleteKey": deleteKey] }
+                      "captureActive": capturing, "doubleTapToggles": tapToggles, "deleteKey": deleteKey,
+                      "localScreenshots": localScreenshots, "screenshotAcks": screenshotAcks] }
     }
     private func connect() {
         guard running else { return }
@@ -143,6 +160,7 @@ final class TrackpadBridge: @unchecked Sendable {
     private func retry(_ c: NWConnection, message: String) {
         guard connection === c else { return }
         c.cancel(); connection = nil; ready = false; macScroll = false; deleteKey = false; clearGesture(); onContacts?(0); onScrollReady?(false); onDeleteReady?(false)
+        localScreenshots = false; screenshotReply?.1.signal(); screenshotReply = nil
         DispatchQueue.main.async { [weak self] in self?.onState?(false, message) }
         queue.asyncAfter(deadline: .now() + 1) { [weak self] in
             guard let self, self.running, self.connection == nil else { return }; self.connect()
@@ -155,6 +173,10 @@ final class TrackpadBridge: @unchecked Sendable {
             while let index = self.buffer.firstIndex(of: 10) {
                 let line = Data(self.buffer[..<index]); self.buffer.removeSubrange(...index)
                 guard let value = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+                if let request = value["shortcutAck"] as? String, request == self.screenshotReply?.0 {
+                    self.screenshotAcks += 1
+                    self.screenshotReply?.1.signal(); self.screenshotReply = nil
+                }
                 if value["pong"] as? Bool == true, let began = self.pingStarted {
                     self.roundTrips.append((ProcessInfo.processInfo.systemUptime - began) * 1000)
                     if self.roundTrips.count > 20 { self.roundTrips.removeFirst() }
@@ -164,6 +186,7 @@ final class TrackpadBridge: @unchecked Sendable {
                     self.ready = true
                     self.macScroll = value["macScroll"] as? Bool == true
                     self.deleteKey = value["deleteKey"] as? Bool == true
+                    self.localScreenshots = value["localScreenshots"] as? Bool == true
                     self.onScrollReady?(self.macScroll)
                     self.onDeleteReady?(self.deleteKey)
                     DispatchQueue.main.async { [weak self] in self?.onState?(true, "Windows 原生多指触控已连接") }

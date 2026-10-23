@@ -27,8 +27,10 @@ sealed class RoutedKeyboard : IDisposable {
  readonly ManualResetEvent ready=new ManualResetEvent(false);readonly Thread worker;
  Hook callback;IntPtr hook;uint threadId;volatile bool enabled,resetRequested;
  long remaps;
+ long screenshotMaskUntil;
  public long Remaps {get{return Interlocked.Read(ref remaps);}}
- public void SetEnabled(bool value){if(!value)resetRequested=true;enabled=value;}
+ public void SetEnabled(bool value){if(!value){resetRequested=true;Interlocked.Exchange(ref screenshotMaskUntil,0);}enabled=value;}
+ public void PrepareLocalScreenshot(){Interlocked.Exchange(ref screenshotMaskUntil,DateTime.UtcNow.AddSeconds(10).Ticks);}
  public RoutedKeyboard() {
   worker=new Thread(Run){IsBackground=true,Name="DJF routed keyboard"};worker.Start();ready.WaitOne();
   if(hook==IntPtr.Zero)throw new Win32Exception("Could not install routed keyboard receiver");
@@ -44,6 +46,11 @@ sealed class RoutedKeyboard : IDisposable {
    if(resetRequested){shortcut.Reset();resetRequested=false;}
    var key=(Key)Marshal.PtrToStructure(data,typeof(Key));
    if(key.extra.ToUInt64()!=OwnTag) {
+    if(enabled && (key.code==0x5B || key.code==0x5C) && (key.flags&0x80)!=0 && DateTime.UtcNow.Ticks<=Interlocked.Read(ref screenshotMaskUntil)) {
+     Interlocked.Exchange(ref screenshotMaskUntil,0);
+     var masked=ScreenshotReleaseInputs((ushort)key.code);
+     if(SendInput((uint)masked.Length,masked,Marshal.SizeOf(typeof(Input)))==masked.Length)return new IntPtr(1);
+    }
     bool other=(GetAsyncKeyState(0x10)&0x8000)!=0 || (GetAsyncKeyState(0x12)&0x8000)!=0 || (GetAsyncKeyState(0x5B)&0x8000)!=0 || (GetAsyncKeyState(0x5C)&0x8000)!=0;
     ushort[] controls;
     if(shortcut.Handle(key.code,key.flags,key.extra.ToUInt64(),enabled,other,out controls)) {
@@ -67,13 +74,17 @@ sealed class RoutedKeyboard : IDisposable {
   if(success)Interlocked.Increment(ref remaps);return success;
  }
  static Input Press(ushort key,bool up) {
-  uint flags=(up?2u:0u)|((key==0x2E || key==0xA3)?1u:0u);
+  uint flags=(up?2u:0u)|((key==0x2E || key==0xA3 || key==0x5B || key==0x5C)?1u:0u);
   return new Input{type=1,keyboard=new Keyboard{key=key,flags=flags,extra=new UIntPtr(OwnTag)}};
  }
  public static Input[] DeleteInputs(ushort[] controls) {
   var result=new List<Input>();foreach(var ctrl in controls)result.Add(Press(ctrl,true));
   result.Add(Press(0x2E,false));result.Add(Press(0x2E,true));
   foreach(var ctrl in controls)result.Add(Press(ctrl,false));return result.ToArray();
+ }
+ public static Input[] ScreenshotReleaseInputs(ushort windowsKey) {
+  // Unassigned VK_E8 masks an otherwise bare Win release, without typing a character.
+  return new[]{Press(0xE8,false),Press(0xE8,true),Press(windowsKey,true)};
  }
  public void Dispose(){enabled=false;PostThreadMessage(threadId,0x12,UIntPtr.Zero,IntPtr.Zero);}
 }

@@ -131,7 +131,8 @@ final class RouterController: ObservableObject {
         trackpad.onScrollReady = { ready in inputControl.setMacScroll(ready) }
         trackpad.onDeleteReady = { ready in inputControl.setDeleteEnabled(ready) }
         controls.onDelete = { touchBridge.delete() }
-        controls.canDeleteInViewer = { [weak self] in
+        controls.onViewerScreenshot = { touchBridge.prepareLocalScreenshot() }
+        controls.canUseNativeViewerShortcuts = { [weak self] in
             DispatchQueue.main.sync {
                 MainActor.assumeIsolated {
                     guard let self else { return false }

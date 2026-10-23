@@ -67,6 +67,32 @@ public static class SharedClipboard {
         int head=Encoding.UTF8.GetByteCount(string.Format(template,0,0,0,0));
         return string.Format(template,head,head+Encoding.UTF8.GetByteCount(content),head+Encoding.UTF8.GetByteCount(prefix),head+Encoding.UTF8.GetByteCount(prefix+value))+content;
     }
+    public static bool SameContent(ClipboardPacket a,ClipboardPacket b) {
+        if(a==null||b==null||a.text!=b.text||a.html!=b.html||a.rtf!=b.rtf)return false;
+        if(a.png==b.png)return true;
+        if(a.png==null||b.png==null)return false;
+        using(var ai=new Bitmap(new MemoryStream(Convert.FromBase64String(a.png))))
+        using(var bi=new Bitmap(new MemoryStream(Convert.FromBase64String(b.png)))) {
+            if(ai.Size!=bi.Size)return false;
+            using(var x=new Bitmap(ai.Width,ai.Height,PixelFormat.Format32bppArgb))
+            using(var y=new Bitmap(bi.Width,bi.Height,PixelFormat.Format32bppArgb)) {
+                var area=new Rectangle(0,0,x.Width,x.Height);
+                using(var g=Graphics.FromImage(x)){g.PageUnit=GraphicsUnit.Pixel;g.CompositingMode=System.Drawing.Drawing2D.CompositingMode.SourceCopy;g.DrawImage(ai,area,0,0,ai.Width,ai.Height,GraphicsUnit.Pixel);}
+                using(var g=Graphics.FromImage(y)){g.PageUnit=GraphicsUnit.Pixel;g.CompositingMode=System.Drawing.Drawing2D.CompositingMode.SourceCopy;g.DrawImage(bi,area,0,0,bi.Width,bi.Height,GraphicsUnit.Pixel);}
+                var xd=x.LockBits(area,ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
+                var yd=y.LockBits(area,ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
+                try {
+                    var xr=new byte[x.Width*4];var yr=new byte[xr.Length];
+                    for(int row=0;row<x.Height;row++) {
+                        Marshal.Copy(IntPtr.Add(xd.Scan0,row*xd.Stride),xr,0,xr.Length);
+                        Marshal.Copy(IntPtr.Add(yd.Scan0,row*yd.Stride),yr,0,yr.Length);
+                        for(int i=0;i<xr.Length;i++)if(xr[i]!=yr[i])return false;
+                    }
+                    return true;
+                }finally{x.UnlockBits(xd);y.UnlockBits(yd);}
+            }
+        }
+    }
     public static void Apply(ClipboardPacket packet) {
         var data=new DataObject();var streams=new System.Collections.Generic.List<MemoryStream>();Bitmap image=null;
         try {
@@ -129,7 +155,7 @@ sealed class ClipboardPump:Form {
     readonly string token;
     readonly TcpListener listener=new TcpListener(IPAddress.Loopback,24804);
     readonly System.Windows.Forms.Timer poll=new System.Windows.Forms.Timer{Interval=100};
-    Session active;uint sequence;string appliedID="";ClipboardPacket lastPacket;
+    Session active;uint sequence;string appliedID="";ClipboardPacket lastPacket;bool applying;
     public ClipboardPump(string secret) {
         token=secret;ShowInTaskbar=false;FormBorderStyle=FormBorderStyle.None;Opacity=0;
         Shown+=delegate{
@@ -155,8 +181,7 @@ sealed class ClipboardPump:Form {
                 string line=reader.ReadLine();if(line==null)return;
                 var hello=json.Deserialize<ClipboardMessage>(line);
                 if(hello.hello!=token||hello.clipboard==null)return;
-                Invoke((Action)(()=>{if(active!=null)active.Client.Close();active=null;Apply(hello.clipboard);active=session;}));
-                session.Send(new{ready=true});
+                Invoke((Action)(()=>{if(active!=null)active.Client.Close();active=null;Apply(hello.clipboard);active=session;session.Send(new{ready=true,ack=hello.clipboard.id});}));
                 while((line=reader.ReadLine())!=null) {
                     var message=json.Deserialize<ClipboardMessage>(line);
                     if(message.ping!=null) {
@@ -165,23 +190,34 @@ sealed class ClipboardPump:Form {
                         continue;
                     }
                     if(message.clipboard==null)continue;
-                    Invoke((Action)(()=>{if(active==session)Apply(message.clipboard);}));
-                    session.Send(new{ack=message.clipboard.id});
+                    Invoke((Action)(()=>{if(active==session){Apply(message.clipboard);session.Send(new{ack=message.clipboard.id});}}));
                 }
             }catch(IOException){}catch(ObjectDisposedException){}catch(Exception){try{session.Send(new{error="Windows 剪贴板暂不可用，请重新连接"});}catch{}}
             finally {BeginInvoke((Action)(()=>{if(active==session){active=null;lastPacket=null;appliedID="";}}));}
         }
     }
-    void Apply(ClipboardPacket packet) {SharedClipboard.Apply(packet);lastPacket=packet;appliedID=packet.id;sequence=SharedClipboard.GetClipboardSequenceNumber();}
+    void Apply(ClipboardPacket packet) {
+        if(SharedClipboard.GetClipboardSequenceNumber()==sequence && SharedClipboard.SameContent(packet,lastPacket)) {
+            lastPacket=packet;return;
+        }
+        applying=true;
+        try {SharedClipboard.Apply(packet);lastPacket=packet;appliedID=packet.id;sequence=SharedClipboard.GetClipboardSequenceNumber();}
+        finally {applying=false;}
+    }
     void Changed(bool notification) {
-        if(active==null||(!notification&&SharedClipboard.GetClipboardSequenceNumber()==sequence))return;
+        if(applying||active==null||(!notification&&SharedClipboard.GetClipboardSequenceNumber()==sequence))return;
         try {
             // Deskflow grabs/empties the secondary clipboard as its client starts.
             // Its clipboard transport is disabled; never relay that internal reset.
             if(Clipboard.ContainsData("Deskflow Ownership")&&lastPacket!=null) {Apply(lastPacket);return;}
             var current=Clipboard.GetData(SharedClipboard.Marker) as string;
             if(!string.IsNullOrEmpty(appliedID)&&current==appliedID){sequence=SharedClipboard.GetClipboardSequenceNumber();return;}
-            var packet=SharedClipboard.Capture();active.Send(new{clipboard=packet});lastPacket=packet;sequence=SharedClipboard.GetClipboardSequenceNumber();
+            uint capturedSequence=SharedClipboard.GetClipboardSequenceNumber();
+            var packet=SharedClipboard.Capture();
+            if(SharedClipboard.GetClipboardSequenceNumber()!=capturedSequence)return;
+            // RDP may re-render an identical image without our private ownership marker.
+            if(!SharedClipboard.SameContent(packet,lastPacket)){active.Send(new{clipboard=packet});lastPacket=packet;}
+            sequence=capturedSequence;
         }catch(System.Runtime.InteropServices.ExternalException) {
             // Clipboard ownership may be temporarily locked by the copying application.
             // Keep the previous sequence so the polling fallback retries.

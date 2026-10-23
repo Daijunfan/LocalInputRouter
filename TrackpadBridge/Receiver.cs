@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
-public sealed class PadMessage { public string type,hello; public int width,height,action; public double x,y; public bool macScroll,begin; public PadContact[] touches; }
+public sealed class PadMessage { public string type,hello,request; public int width,height,action; public double x,y; public bool macScroll,begin; public PadContact[] touches; }
 static class Receiver {
  static readonly string directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DJF-Windows");
  static readonly JavaScriptSerializer json=new JavaScriptSerializer {MaxJsonLength=8192};
@@ -23,7 +23,7 @@ static class Receiver {
    try {
     string token=File.ReadAllText(Path.Combine(directory,"trackpad.token")).Trim();
     var listener=new TcpListener(IPAddress.Loopback,24801);listener.Start();
-    Status(new{ready=true,connected=false,pid=Process.GetCurrentProcess().Id,version="1.1.1",commandBackspace="Delete",commandX="Delete",threeFingerHorizontal="desktop"});
+    Status(new{ready=true,connected=false,pid=Process.GetCurrentProcess().Id,version="1.1.2",commandBackspace="Delete",commandX="Delete",threeFingerHorizontal="desktop"});
     while(true)using(var client=listener.AcceptTcpClient()) {
      client.NoDelay=true;client.ReceiveTimeout=2500;
      using(var reader=new StreamReader(client.GetStream(),Encoding.UTF8,false,4096,true))
@@ -35,7 +35,7 @@ static class Receiver {
        using(var pad=new NativeTouchpad(hello.width,hello.height,hello.macScroll)) {
         var scroll=new NativeScroll();
         var desktop=new ThreeFingerDesktop();keyboard.SetEnabled(true);
-        writer.WriteLine("{\"ready\":true,\"nativeTouchpad\":true,\"macScroll\":true,\"deleteKey\":true}");
+        writer.WriteLine("{\"ready\":true,\"nativeTouchpad\":true,\"macScroll\":true,\"deleteKey\":true,\"localScreenshots\":true}");
         DateTime nextStatus=DateTime.MinValue;
         while((line=reader.ReadLine())!=null) {
          if(line.Length>8192)throw new InvalidDataException("Frame too long");
@@ -45,12 +45,13 @@ static class Receiver {
           case "action":pad.Action(message.action);break;
           case "scroll":if(hello.macScroll)scroll.Scroll(message.x,message.y,message.begin);break;
           case "delete":keyboard.Delete();break;
+          case "localScreenshot":keyboard.PrepareLocalScreenshot();writer.WriteLine(json.Serialize(new{shortcutAck=message.request}));break;
           case "reset":desktop.Reset();pad.Reset();scroll.Reset();break;
           case "ping":writer.WriteLine("{\"pong\":true}");break;
           default:throw new InvalidDataException("Unknown input message");
          }
          if(DateTime.UtcNow>=nextStatus) {
-          Status(new{ready=true,connected=true,pid=Process.GetCurrentProcess().Id,version="1.1.1",frames=pad.Frames,maxContacts=pad.MaxContacts,macScroll=hello.macScroll,scrollEvents=scroll.Events,wheelX=scroll.WheelX,wheelY=scroll.WheelY,threeFingerDesktopFrames=desktop.MappedFrames,deleteRemaps=keyboard.Remaps});
+          Status(new{ready=true,connected=true,pid=Process.GetCurrentProcess().Id,version="1.1.2",frames=pad.Frames,maxContacts=pad.MaxContacts,macScroll=hello.macScroll,scrollEvents=scroll.Events,wheelX=scroll.WheelX,wheelY=scroll.WheelY,threeFingerDesktopFrames=desktop.MappedFrames,deleteRemaps=keyboard.Remaps});
           nextStatus=DateTime.UtcNow.AddSeconds(1);
          }
         }

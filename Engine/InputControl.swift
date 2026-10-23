@@ -100,7 +100,8 @@ final class InputControl: @unchecked Sendable {
     var onVoicePrepare: ((CGKeyCode) -> Bool)?
     var onVoiceDiscard: (() -> Void)?
     var onDelete: (() -> Void)?
-    var canDeleteInViewer: (() -> Bool)?
+    var canUseNativeViewerShortcuts: (() -> Bool)?
+    var onViewerScreenshot: (() -> Void)?
     var isInstalled: Bool { tap != nil && guardTap != nil }
     var recoveryReason: String {
         lock.lock(); defer { lock.unlock() }; return lastRecovery
@@ -323,6 +324,7 @@ final class InputControl: @unchecked Sendable {
         let voice = voiceCapture
         let canVoice = voiceEnabled
         let nativeSpeech = available && !remote && rdpPointer && canVoice
+        let nativeViewer = available && !remote && rdpPointer && !voice
         let speechTarget = remote || nativeSpeech
         let multipleContacts = contacts >= 2
         let reserveTap = tapReserved
@@ -400,6 +402,13 @@ final class InputControl: @unchecked Sendable {
             if voiceKey == kVK_Function { return MacVoiceEvents.local(event) }
         }
         if speechTarget && voice && [.leftMouseDown,.rightMouseDown,.otherMouseDown].contains(type) { onVoiceCancel?() }
+        // Preserve the entire Mac shortcut. Only mask the already-forwarded Win
+        // key at the authenticated receiver before macOS opens its screenshot UI.
+        let plainCommand = event.flags.intersection(RouterShortcut.modifierMask) == .maskCommand
+        let screenshot = type == .keyDown && [kVK_ANSI_1, kVK_ANSI_2].contains(Int(voiceKey)) && plainCommand
+        if nativeViewer && screenshot && event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+            onViewerScreenshot?()
+        }
         // Recognized gestures must not trigger Mission Control or zoom on the Mac.
         if (remote && [18, 29, 30, 31, 32].contains(type.rawValue))
             || (reserveTap && [29, 30, 31, 32].contains(type.rawValue)) { return nil }
@@ -482,7 +491,7 @@ final class InputControl: @unchecked Sendable {
                 && (key == kVK_ANSI_X || key == kVK_Delete)
             lock.unlock()
             if routeVoice { if let copy = event.copy() { onVoiceEvent?(copy) }; return MacVoiceEvents.local(event) }
-            if delete && (remote || (key == kVK_ANSI_X && canDeleteInViewer?() == true)) {
+            if delete && (remote || (key == kVK_ANSI_X && canUseNativeViewerShortcuts?() == true)) {
                 lock.lock(); swallowed.insert(key); lock.unlock()
                 onDelete?(); return nil
             }

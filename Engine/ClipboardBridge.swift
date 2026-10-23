@@ -9,7 +9,8 @@ import Network
     private let codec = DispatchQueue(label: "com.djf.inputrouter.clipboard.codec", qos: .utility)
     private var connection: NWConnection?
     private var timer: Timer?
-    private var buffer = Data(), token = "", appliedID = ""
+    private var buffer = Data(), token = "", appliedID = "", pendingID = ""
+    private var lastPayload = [String: String]()
     private var running = false, networkReady = false, ready = false, encoding = false
     private var lastChange = -1, generation = 0
     private var lastPing = Date.distantPast, lastPong = Date.distantPast
@@ -34,6 +35,7 @@ import Network
     }
     func stop() {
         generation += 1; running = false; networkReady = false; ready = false; encoding = false
+        pendingID = ""; lastPayload.removeAll()
         lastPing = .distantPast; lastPong = .distantPast
         timer?.invalidate(); timer = nil; connection?.cancel(); connection = nil; buffer.removeAll()
         onState?(false, "剪贴板共享未连接")
@@ -43,6 +45,7 @@ import Network
         let tcp = NWProtocolTCP.Options(); tcp.noDelay = true
         let c = NWConnection(host: "127.0.0.1", port: port, using: NWParameters(tls: nil, tcp: tcp))
         connection = c; buffer.removeAll(); lastChange = -1; appliedID = ""
+        pendingID = ""; lastPayload.removeAll()
         lastPing = .distantPast; lastPong = .distantPast
         c.stateUpdateHandler = { [weak self, weak c] state in
             MainActor.assumeIsolated {
@@ -62,6 +65,7 @@ import Network
         guard connection === c else { return }
         generation += 1; c.cancel(); connection = nil
         ready = false; networkReady = false; encoding = false
+        pendingID = ""
         lastPing = .distantPast; lastPong = .distantPast
         onState?(false, "剪贴板共享正在重连")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
@@ -106,7 +110,12 @@ import Network
                 guard let self, let c, self.generation == epoch, self.connection === c else { return }
                 self.encoding = false
                 if self.board.changeCount != count { self.sendCurrent(c, initial: initial); return }
-                if let data, self.write(data, c) { self.sent += 1 }
+                let payload = packet.filter { $0.key != "id" }
+                if !initial && payload == self.lastPayload { return }
+                if let data, self.write(data, c) {
+                    self.pendingID = packet["id"] ?? ""
+                    self.lastPayload = payload; self.sent += 1
+                }
             }
         }
     }
@@ -134,13 +143,23 @@ import Network
                     guard let value = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
                     if value["ready"] as? Bool == true {
                         self.ready = true
+                        if value["ack"] == nil { self.pendingID = "" } // Older receivers acknowledge the initial copy with ready.
                         self.lastPong = Date()
                         self.onState?(true, "剪贴板已共享 · 文字、图片与富文本")
                     }
                     if value["pong"] as? String != nil { self.lastPong = Date() }
+                    if let ack = value["ack"] as? String, ack == self.pendingID { self.pendingID = "" }
                     if let fields = value["clipboard"] as? [String: Any] {
+                        // The receiver queues copies before the acknowledgement of our newer copy.
+                        // Do not let an older in-flight copy overwrite local capture/encoding.
+                        if self.encoding || !self.pendingID.isEmpty || self.board.changeCount != self.lastChange {
+                            self.poll(); continue
+                        }
                         let packet = fields.compactMapValues { $0 as? String }
+                        let payload = packet.filter { $0.key != "id" }
+                        if payload == self.lastPayload { continue }
                         MacClipboard.apply(packet, to: self.board)
+                        self.lastPayload = payload
                         self.appliedID = packet["id"] ?? ""; self.lastChange = self.board.changeCount
                         self.received += 1
                     }

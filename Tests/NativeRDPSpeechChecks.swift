@@ -69,7 +69,7 @@ import Carbon
         control.setDeleteEnabled(true)
         var deletes = 0; control.onDelete = { deletes += 1 }
         var viewerFocused = true
-        control.canDeleteInViewer = { viewerFocused }
+        control.canUseNativeViewerShortcuts = { viewerFocused }
         for routed in [false, true] {
             control.confirm(routed ? .windows : .mac); control.setRDPPointer(true)
             for key in [kVK_ANSI_X, kVK_Delete] {
@@ -98,6 +98,29 @@ import Carbon
         precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
         control.configure(available: true, pid: getpid())
         print("PASS: Command delete aliases work in routed and unrouted DJF viewers; other apps, unavailable receivers, speech and other chords remain native")
+
+        control.confirm(.mac); viewerFocused = true
+        var screenshots = 0; control.onViewerScreenshot = { screenshots += 1 }
+        for key in [kVK_ANSI_1, kVK_ANSI_2] {
+            precondition(handle(kVK_Command, .flagsChanged, .maskCommand), "Mac Command-down must never be suppressed")
+            precondition(handle(key, .keyDown, .maskCommand), "The system screenshot shortcut must remain local")
+            precondition(handle(key, .keyUp, .maskCommand))
+            precondition(handle(kVK_Command, .flagsChanged))
+        }
+        precondition(screenshots == 2)
+        precondition(handle(kVK_Command, .flagsChanged, .maskCommand))
+        precondition(handle(kVK_ANSI_C, .keyDown, .maskCommand), "Native copy remains available")
+        precondition(handle(kVK_ANSI_C, .keyUp, .maskCommand))
+        precondition(handle(kVK_Command, .flagsChanged))
+        viewerFocused = false
+        precondition(handle(kVK_Command, .flagsChanged, .maskCommand), "Other Mac apps retain their original Command events")
+        precondition(handle(kVK_Command, .flagsChanged))
+        control.confirm(.windows); viewerFocused = true
+        precondition(handle(kVK_Command, .flagsChanged, .maskCommand), "Routed shortcuts remain unchanged")
+        precondition(handle(kVK_Command, .flagsChanged))
+        control.confirm(.mac)
+        precondition(screenshots == 2)
+        print("PASS: native screenshot chords preserve every Mac Command event and request only a remote menu mask")
 
         control.setRDPPointer(true); control.setNativeGestures(true); control.setMacScroll(true)
         control.setPointerGain(10)

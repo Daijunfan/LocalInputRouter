@@ -39,6 +39,13 @@ static class WindowsBindingsChecks {
   shortcut.Reset();shortcut.Handle(0xA2,0,0,true,false,out controls);
   Check(!shortcut.Handle(0x58,0,0,true,false,out controls),"Physical Windows Ctrl+X must remain Cut");
   Check(RoutedKeyboard.DeleteInputs(new ushort[0]).Length==2,"Native RDP Delete must be balanced without Ctrl held");
+  foreach(ushort win in new ushort[]{0x5B,0x5C}) {
+   var mask=RoutedKeyboard.ScreenshotReleaseInputs(win);
+   Check(mask.Length==3 && mask[0].keyboard.key==0xE8 && mask[0].keyboard.flags==0,"Screenshot mask is a non-printing key");
+   Check(mask[1].keyboard.key==0xE8 && mask[1].keyboard.flags==2,"Screenshot mask releases its own key");
+   Check(mask[2].keyboard.key==win && mask[2].keyboard.flags==3,"Original extended Windows key release is preserved");
+   Check(mask[2].keyboard.extra.ToUInt64()==RoutedKeyboard.OwnTag,"Replayed release must not recurse through the hook");
+  }
   Console.WriteLine("PASS: three/four-finger distinction; routed Command+Delete; physical keys preserved; balanced modifiers");return 0;
  }
 }
