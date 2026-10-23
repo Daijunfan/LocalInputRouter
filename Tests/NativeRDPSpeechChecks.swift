@@ -72,39 +72,31 @@ import Carbon
         control.canUseNativeViewerShortcuts = { viewerFocused }
         for routed in [false, true] {
             control.confirm(routed ? .windows : .mac); control.setRDPPointer(true)
-            for key in [kVK_ANSI_X, kVK_Delete] {
-                precondition(!handle(key, .keyDown, .maskCommand))
-                precondition(!handle(key, .keyUp))
-            }
+            precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand), "Letter X keeps standard Cut")
+            precondition(handle(kVK_ANSI_X, .keyUp))
+            precondition(!handle(kVK_Delete, .keyDown, .maskCommand))
+            precondition(!handle(kVK_Delete, .keyUp))
         }
-        precondition(deletes == 4)
+        precondition(deletes == 2)
         control.confirm(.mac); control.setRDPPointer(false); viewerFocused = false
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
-        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 4, "Mac Command+Backspace must retain its native purpose outside the DJF viewer")
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 2)
         control.setRDPPointer(true)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4, "A stale viewer cache must not delete in another app")
-        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 4)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 2, "A stale viewer cache must not delete in another app")
         control.setRDPPointer(false); viewerFocused = true
-        precondition(!handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 5, "A newly focused DJF viewer must not wait for the pointer cache")
-        precondition(!handle(kVK_ANSI_X, .keyUp))
-        precondition(!handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6, "The observed Command+Backspace chord must work in an unrouted DJF viewer")
+        precondition(!handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 3, "The observed Command+Backspace chord must not wait for the pointer cache")
         precondition(!handle(kVK_Delete, .keyUp))
         control.setRDPPointer(true); control.setDeleteEnabled(false)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 6)
-        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 3)
         control.setDeleteEnabled(true); control.setVoiceCapture(true)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 6)
-        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 3)
         control.setVoiceCapture(false)
         for flags in [CGEventFlags.maskControl, [.maskCommand, .maskShift], [.maskCommand, .maskAlternate]] {
-            precondition(handle(kVK_ANSI_X, .keyDown, flags) && deletes == 6)
-            precondition(handle(kVK_Delete, .keyDown, flags) && deletes == 6)
+            precondition(handle(kVK_Delete, .keyDown, flags) && deletes == 3)
         }
         control.configure(available: false, pid: 0)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 6)
-        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 3)
         control.configure(available: true, pid: getpid())
-        print("PASS: Command delete aliases work in routed and unrouted DJF viewers; other apps, unavailable receivers, speech and other chords remain native")
+        print("PASS: Command+Backspace deletes in both modes; letter X, other apps, unavailable receivers and voice keep their original meaning")
 
         control.confirm(.mac); viewerFocused = true
         var screenshots = 0; control.onViewerScreenshot = { screenshots += 1 }
@@ -128,6 +120,40 @@ import Carbon
         control.confirm(.mac)
         precondition(screenshots == 2)
         print("PASS: native screenshot chords preserve every Mac Command event and request only a remote menu mask")
+
+        control.setRDPPointer(true); control.setNativeKeysReady(true); control.setNativeRDPKeyboard(true)
+        var keys = [(UInt16, Bool, Int)](), modifiers = [Int]()
+        control.onNativeKey = { keys.append(($0,$1,$2)) }; control.onNativeModifiers = { modifiers.append($0) }
+        precondition(WindowsKeyboard.deskflowModifiers == "modifierSuper=ctrl\nmodifierCtrl=super")
+        for (key, flags, expected) in [(kVK_Command,CGEventFlags(rawValue:0x100008),1),
+                                      (kVK_RightCommand,CGEventFlags(rawValue:0x100010),2),
+                                      (kVK_Control,CGEventFlags(rawValue:0x40001),4),
+                                      (kVK_RightControl,CGEventFlags(rawValue:0x42000),8)] {
+            precondition(handle(key,.flagsChanged,flags), "Original modifier transitions stay available to macOS")
+            precondition(modifiers.last == expected)
+            for letter in [kVK_ANSI_C,kVK_ANSI_X,kVK_ANSI_Q,kVK_ANSI_T,kVK_LeftArrow,kVK_F16] {
+                precondition(!handle(letter,.keyDown,flags))
+                precondition(keys.last!.0 == WindowsKeyboard.keys[UInt16(letter)] && keys.last!.1 && keys.last!.2 == expected)
+                precondition(!handle(letter,.keyUp,flags))
+                precondition(!keys.last!.1)
+            }
+            precondition(handle(key,.flagsChanged))
+            precondition(modifiers.last == 0)
+        }
+        let all = CGEventFlags([.maskCommand,.maskControl,.maskShift,.maskAlternate])
+        precondition(!handle(kVK_ANSI_C,.keyDown,all) && keys.last!.2 == 85)
+        precondition(handle(kVK_Command,.flagsChanged))
+        precondition(!handle(kVK_ANSI_C,.keyUp), "A chord key released after its modifier must still be released remotely")
+        let count=keys.count
+        precondition(handle(kVK_ANSI_A,.keyDown), "Ordinary native RDP Unicode input must stay native")
+        precondition(handle(kVK_ANSI_2,.keyDown,.maskCommand) && keys.count == count, "Mac screenshot shortcut must stay local")
+        precondition(deletes == 3, "Command+letter X must not invoke Delete")
+        viewerFocused=false
+        precondition(handle(kVK_ANSI_C,.keyDown,.maskCommand) && keys.count == count)
+        viewerFocused=true;control.setVoiceCapture(true)
+        precondition(handle(kVK_ANSI_C,.keyDown,.maskCommand) && keys.count == count)
+        control.setVoiceCapture(false);control.setNativeKeysReady(false)
+        print("PASS: left/right Command and Control fully exchange; all shortcut keys share one projection; screenshot, Unicode, voice and other apps remain native")
 
         control.setRDPPointer(true); control.setNativeGestures(true); control.setMacScroll(true)
         control.setPointerGain(10)

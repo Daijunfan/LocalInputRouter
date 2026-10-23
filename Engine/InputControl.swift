@@ -72,6 +72,8 @@ final class InputControl: @unchecked Sendable {
     private var rdpPointer = false
     private var voiceEnabled = false
     private var deleteEnabled = false
+    private var nativeKeysReady = false, nativeRDPKeyboard = false
+    private var nativePressed = Set<CGKeyCode>()
     private var pendingVoiceKey: CGKeyCode?
     private var pendingVoiceEvent: CGEvent?
     private var voiceGeneration = 0
@@ -100,6 +102,8 @@ final class InputControl: @unchecked Sendable {
     var onVoicePrepare: ((CGKeyCode) -> Bool)?
     var onVoiceDiscard: (() -> Void)?
     var onDelete: (() -> Void)?
+    var onNativeModifiers: ((Int) -> Void)?
+    var onNativeKey: ((UInt16, Bool, Int) -> Void)?
     var canUseNativeViewerShortcuts: (() -> Bool)?
     var onViewerScreenshot: (() -> Void)?
     var isInstalled: Bool { tap != nil && guardTap != nil }
@@ -132,6 +136,13 @@ final class InputControl: @unchecked Sendable {
     func setDragTapInterval(_ value: Double) { lock.lock(); tapDrag.tapInterval = value; lock.unlock() }
     func setVoiceCapture(_ value: Bool) { lock.lock(); voiceCapture = value; lock.unlock() }
     func setDeleteEnabled(_ value: Bool) { lock.lock(); deleteEnabled = value; lock.unlock() }
+    func setNativeKeysReady(_ value: Bool) { lock.lock(); nativeKeysReady = value; lock.unlock() }
+    func setNativeRDPKeyboard(_ value: Bool) { lock.lock(); nativeRDPKeyboard = value; lock.unlock() }
+    private func nativeKeyboardViewer() -> Bool {
+        guard canUseNativeViewerShortcuts?() == true else { return false }
+        lock.lock(); defer { lock.unlock() }
+        return available && confirmed == .mac && nativeKeysReady && nativeRDPKeyboard && !voiceCapture
+    }
     func setRDPPointer(_ value: Bool) { lock.lock(); rdpPointer = value; gain.reset(); lock.unlock() }
     func setVoiceEnabled(_ value: Bool) {
         lock.lock(); voiceEnabled = value
@@ -181,7 +192,7 @@ final class InputControl: @unchecked Sendable {
         drag.reset()
         tapDrag.reset()
         nativeLeftDown = false; optionRelayed = false
-        voiceCapture = false
+        voiceCapture = false; nativePressed.removeAll()
         pendingVoiceKey = nil; pendingVoiceEvent = nil; voiceGeneration += 1
         lock.unlock()
     }
@@ -193,7 +204,7 @@ final class InputControl: @unchecked Sendable {
         drag.reset()
         tapDrag.reset()
         nativeLeftDown = false; optionRelayed = false
-        voiceCapture = false
+        voiceCapture = false; nativePressed.removeAll()
         pendingVoiceKey = nil; pendingVoiceEvent = nil; voiceGeneration += 1
         lock.unlock()
     }
@@ -272,7 +283,7 @@ final class InputControl: @unchecked Sendable {
         drag.reset()
         tapDrag.reset()
         nativeLeftDown = false; optionRelayed = false
-        voiceCapture = false
+        voiceCapture = false; nativePressed.removeAll()
         pendingVoiceKey = nil; pendingVoiceEvent = nil; voiceGeneration += 1
         lock.unlock()
         // The recovery shortcut must work even if the backend or UI is stuck.
@@ -325,6 +336,8 @@ final class InputControl: @unchecked Sendable {
         let canVoice = voiceEnabled
         let nativeSpeech = available && !remote && rdpPointer && canVoice
         let nativeViewer = available && !remote && rdpPointer && !voice
+        let nativeKeyboard = available && !remote && nativeKeysReady && !voice
+        let nativePointerModifiers = nativeKeyboard && nativeRDPKeyboard && rdpPointer
         let speechTarget = remote || nativeSpeech
         let multipleContacts = contacts >= 2
         let reserveTap = tapReserved
@@ -409,6 +422,17 @@ final class InputControl: @unchecked Sendable {
         if nativeViewer && screenshot && event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
             onViewerScreenshot?()
         }
+        if nativeKeyboard && type == .flagsChanged,
+           [kVK_Command,kVK_RightCommand,kVK_Control,kVK_RightControl].contains(Int(voiceKey)), nativeKeyboardViewer() {
+            onNativeModifiers?(WindowsKeyboard.modifierMask(event.flags))
+        }
+        // Keep original Command transitions for macOS screenshot shortcuts. RDP's
+        // duplicate Ctrl/Win events are filtered at the authenticated receiver.
+        if nativePointerModifiers && event.flags.intersection([.maskCommand,.maskControl]).rawValue != 0,
+           [.mouseMoved,.leftMouseDragged,.rightMouseDragged,.otherMouseDragged,.leftMouseDown,.leftMouseUp,.rightMouseDown,.rightMouseUp,.otherMouseDown,.otherMouseUp,.scrollWheel].contains(type) {
+            let button = [.leftMouseDown,.leftMouseUp,.rightMouseDown,.rightMouseUp,.otherMouseDown,.otherMouseUp].contains(type)
+            if !button || nativeKeyboardViewer() { event.flags = WindowsKeyboard.pointerFlags(event.flags) }
+        }
         // Recognized gestures must not trigger Mission Control or zoom on the Mac.
         if (remote && [18, 29, 30, 31, 32].contains(type.rawValue))
             || (reserveTap && [29, 30, 31, 32].contains(type.rawValue)) { return nil }
@@ -461,6 +485,11 @@ final class InputControl: @unchecked Sendable {
         }
         let key = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
         lock.lock()
+        if type == .keyUp, nativePressed.remove(key) != nil {
+            lock.unlock()
+            if let mapped = WindowsKeyboard.keys[key] { onNativeKey?(mapped, false, WindowsKeyboard.modifierMask(event.flags)) }
+            return nil
+        }
         if type == .keyUp && key == kVK_Escape { escapeIsDown = false }
         if type == .keyUp, swallowed.remove(key) != nil {
             lock.unlock(); return nil
@@ -488,12 +517,18 @@ final class InputControl: @unchecked Sendable {
             let routeVoice = speechTarget && voiceCapture && (type == .keyDown || type == .keyUp)
             let delete = available && deleteEnabled && !voiceCapture && type == .keyDown
                 && event.flags.intersection(RouterShortcut.modifierMask) == .maskCommand
-                && (key == kVK_ANSI_X || key == kVK_Delete)
+                && key == kVK_Delete
             lock.unlock()
             if routeVoice { if let copy = event.copy() { onVoiceEvent?(copy) }; return MacVoiceEvents.local(event) }
             if delete && (remote || canUseNativeViewerShortcuts?() == true) {
                 lock.lock(); swallowed.insert(key); lock.unlock()
                 onDelete?(); return nil
+            }
+            if nativeKeyboard && type == .keyDown && !screenshot,
+               !event.flags.intersection([.maskCommand,.maskControl]).isEmpty,
+               let mapped = WindowsKeyboard.keys[key], nativeKeyboardViewer() {
+                lock.lock(); nativePressed.insert(key); lock.unlock()
+                onNativeKey?(mapped, true, WindowsKeyboard.modifierMask(event.flags)); return nil
             }
             return Unmanaged.passUnretained(event)
         }

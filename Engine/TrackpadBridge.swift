@@ -15,8 +15,9 @@ final class TrackpadBridge: @unchecked Sendable {
     private var running = false, ready = false, routing = false
     private var macScroll = false, scrollEvents = 0
     private var deleteKey = false
+    private var nativeKeys = false, nativeKeyboard = false, nativeKeyEvents = 0
     private var localScreenshots = false
-    private var screenshotReply: (String, DispatchSemaphore)?
+    private var screenshotReply: (String, DispatchSemaphore, Bool)?
     private var screenshotAcks = 0
     private var peakFingers = 0, touchStart = 0.0, maxDistance = 0.0
     private var starts: [Int32: (Double, Double)] = [:]
@@ -35,6 +36,7 @@ final class TrackpadBridge: @unchecked Sendable {
     var onTouchFrame: ((Int, Double, Double, Double) -> Void)?
     var onScrollReady: ((Bool) -> Void)?
     var onDeleteReady: ((Bool) -> Void)?
+    var onNativeKeysReady: ((Bool) -> Void)?
     var onDoubleTap: (() -> Void)?
     var onTapReservation: ((Bool) -> Void)?
 
@@ -97,6 +99,7 @@ final class TrackpadBridge: @unchecked Sendable {
             pingStarted = nil; roundTrips.removeAll()
             onScrollReady?(false)
             onDeleteReady?(false)
+            nativeKeys = false; onNativeKeysReady?(false)
             onContacts?(0)
         }
     }
@@ -111,8 +114,25 @@ final class TrackpadBridge: @unchecked Sendable {
         queue.async {
             guard self.routing != enabled else { return }
             self.routing = enabled; self.clearGesture()
+            if enabled { self.nativeKeyboard = false; if self.nativeKeys { self.send(["type":"nativeKeyboard", "enabled":false]) } }
             if !enabled { self.send(["type": "reset"]); self.onContacts?(0) }
         }
+    }
+    func setNativeKeyboard(_ enabled: Bool) {
+        queue.async {
+            guard self.nativeKeyboard != enabled else { return }
+            self.nativeKeyboard = enabled
+            if self.nativeKeys { self.send(["type":"nativeKeyboard", "enabled":enabled]) }
+        }
+    }
+    func nativeKey(_ key: UInt16, down: Bool, modifiers: Int) {
+        queue.async {
+            guard self.ready, self.nativeKeys, self.nativeKeyboard else { return }
+            self.send(["type":"nativeKey", "key":Int(key), "down":down, "modifiers":modifiers]); self.nativeKeyEvents += 1
+        }
+    }
+    func nativeModifiers(_ modifiers: Int) {
+        viewerRequest(type: "nativeModifiers", fields: ["modifiers":modifiers], native: true)
     }
     func delete() {
         queue.async {
@@ -121,11 +141,14 @@ final class TrackpadBridge: @unchecked Sendable {
         }
     }
     func prepareLocalScreenshot() {
+        viewerRequest(type: "localScreenshot", fields: [:], native: false)
+    }
+    private func viewerRequest(type: String, fields: [String: Any], native: Bool) {
         let request = UUID().uuidString, reply = DispatchSemaphore(value: 0)
         queue.async {
-            guard self.ready, self.localScreenshots else { reply.signal(); return }
-            self.screenshotReply = (request, reply)
-            self.send(["type": "localScreenshot", "request": request])
+            guard self.ready, native ? self.nativeKeys && self.nativeKeyboard : self.localScreenshots else { reply.signal(); return }
+            self.screenshotReply = (request, reply, native)
+            self.send(fields.merging(["type":type,"request":request]) { _,new in new })
         }
         // The HID worker waits briefly so RDP's focus-loss release cannot race
         // ahead of the receiver's mask. Mac Command events always pass unchanged.
@@ -138,7 +161,8 @@ final class TrackpadBridge: @unchecked Sendable {
                       "roundTripMedianMs": roundTrips.isEmpty ? -1 : roundTrips.sorted()[roundTrips.count / 2],
                       "roundTripMaxMs": roundTrips.max() ?? -1, "skippedSingleFingerFrames": skippedFrames,
                       "captureActive": capturing, "doubleTapToggles": tapToggles, "deleteKey": deleteKey,
-                      "localScreenshots": localScreenshots, "screenshotAcks": screenshotAcks] }
+                      "localScreenshots": localScreenshots, "screenshotAcks": screenshotAcks,
+                      "nativeKeys":nativeKeys,"nativeKeyboard":nativeKeyboard,"nativeKeyEvents":nativeKeyEvents] }
     }
     private func connect() {
         guard running else { return }
@@ -161,6 +185,7 @@ final class TrackpadBridge: @unchecked Sendable {
         guard connection === c else { return }
         c.cancel(); connection = nil; ready = false; macScroll = false; deleteKey = false; clearGesture(); onContacts?(0); onScrollReady?(false); onDeleteReady?(false)
         localScreenshots = false; screenshotReply?.1.signal(); screenshotReply = nil
+        nativeKeys = false; onNativeKeysReady?(false)
         DispatchQueue.main.async { [weak self] in self?.onState?(false, message) }
         queue.asyncAfter(deadline: .now() + 1) { [weak self] in
             guard let self, self.running, self.connection == nil else { return }; self.connect()
@@ -174,7 +199,7 @@ final class TrackpadBridge: @unchecked Sendable {
                 let line = Data(self.buffer[..<index]); self.buffer.removeSubrange(...index)
                 guard let value = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
                 if let request = value["shortcutAck"] as? String, request == self.screenshotReply?.0 {
-                    self.screenshotAcks += 1
+                    if self.screenshotReply?.2 == false { self.screenshotAcks += 1 }
                     self.screenshotReply?.1.signal(); self.screenshotReply = nil
                 }
                 if value["pong"] as? Bool == true, let began = self.pingStarted {
@@ -187,8 +212,11 @@ final class TrackpadBridge: @unchecked Sendable {
                     self.macScroll = value["macScroll"] as? Bool == true
                     self.deleteKey = value["deleteKey"] as? Bool == true
                     self.localScreenshots = value["localScreenshots"] as? Bool == true
+                    self.nativeKeys = value["nativeKeys"] as? Bool == true
+                    if self.nativeKeys { self.send(["type":"nativeKeyboard", "enabled":self.nativeKeyboard]) }
                     self.onScrollReady?(self.macScroll)
                     self.onDeleteReady?(self.deleteKey)
+                    self.onNativeKeysReady?(self.nativeKeys)
                     DispatchQueue.main.async { [weak self] in self?.onState?(true, "Windows 原生多指触控已连接") }
                 }
                 if let failure = value["error"] as? String { self.retry(c, message: "原生触控暂不可用：" + failure); return }

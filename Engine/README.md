@@ -2,7 +2,7 @@
 
 ## 1.9.12 明确路由边界与 RDP 语音
 
-双轻触拖动、精细滚动、原生多指输入和 Command+X／Command+Backspace 删除只在已确认路由到 Windows 时启用。点击或激活 DJF-Windows 不启用输入路由，未路由时由 Windows App 处理普通输入。Windows 实体 Ctrl+X 保持剪切。
+双轻触拖动、精细滚动与原生多指输入在明确路由到 Windows 时启用。Command+⌫ 删除及 Command/Control 互换也适用于未路由但焦点在 DJF-Windows 的 RDP 窗口；普通文本继续走 Windows App 的 Unicode 通道。点击或激活窗口不切换路由目标。字母 X 与 Windows 实体 Ctrl+X 保持剪切。
 
 输入目标仍为 Mac、Windows App 的前台窗口标题为 `DJF-Windows`、原有语音接收通道就绪时，仅主动按下 Fn／右 Option 才准备临时 IME 客户端，然后放行真实触发键，不延迟补发。Fn+功能键、Option 组合键保留原路径；1.9.14 的临时客户端选择现有豆包输入法并在结束时恢复原输入法。识别与末尾纠错完成后关闭；切换窗口、返回 Mac 或断开连接时释放它。返回 Mac 先确认释放输入，关闭客户端时不重新抢焦点。Windows 接收端、身份验证与端口沿用现有实现。
 

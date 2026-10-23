@@ -130,7 +130,10 @@ final class RouterController: ObservableObject {
         let touchBridge = trackpad
         trackpad.onScrollReady = { ready in inputControl.setMacScroll(ready) }
         trackpad.onDeleteReady = { ready in inputControl.setDeleteEnabled(ready) }
+        trackpad.onNativeKeysReady = { ready in inputControl.setNativeKeysReady(ready) }
         controls.onDelete = { touchBridge.delete() }
+        controls.onNativeModifiers = { touchBridge.nativeModifiers($0) }
+        controls.onNativeKey = { touchBridge.nativeKey($0, down: $1, modifiers: $2) }
         controls.onViewerScreenshot = { touchBridge.prepareLocalScreenshot() }
         controls.canUseNativeViewerShortcuts = { [weak self] in
             DispatchQueue.main.sync {
@@ -581,8 +584,7 @@ final class RouterController: ObservableObject {
             name=DJF-Mac
             [computer_DJF-Windows]
             name=DJF-Windows
-            modifierSuper=ctrl
-            modifierCtrl=super
+            \(WindowsKeyboard.deskflowModifiers)
             [server]
             externalConfig=true
             externalConfigFile=\(config.path)
@@ -1024,6 +1026,9 @@ final class RouterController: ObservableObject {
             rdpPointer = enabled; controls.setRDPPointer(enabled)
             localCursor.setRouting(destination == .windows && !enabled)
         }
+        let nativeKeyboard = enabled && rdpFrontmost == RemoteDesktopMode.rdp.bundleIdentifier && destination == .mac && !voice.isPrepared
+        controls.setNativeRDPKeyboard(nativeKeyboard)
+        trackpad.setNativeKeyboard(nativeKeyboard)
         if destination == .mac && desired == .mac && !enabled && voice.isPrepared { voice.leave() }
     }
 

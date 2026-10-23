@@ -1,5 +1,7 @@
 # 输入路由 App
 
+1.10.8 统一已路由和未路由 DJF-Windows 窗口的修饰键：左右 Command → Windows Ctrl，左右 Control → Windows Win；字母 X 保持剪切，Command+⌫（Mac 删除键）发送 Delete。未路由组合键通过已有认证通道保序发送，RDP 重复的 Ctrl/Win 事件被过滤；普通 Unicode/中文、豆包语音和本机 Command+1/2 截图保留原有路径。
+
 1.10.7 补齐未路由时 DJF-Windows 窗口中的 Command+⌫（Mac 删除键）→ Delete，与 Command+X 使用同一认证删除通道；按下与松开均被接管。保留其他 Mac 窗口、录音期间及额外修饰键组合的原始用途。
 
 Windows 接收端 1.1.3 修复未路由时 Command+X 无法删除文件：发送普通 Delete 前临时释放 Windows App 转发的 Win 键，随后恢复按住状态，并屏蔽其单独松开引发的开始菜单。Mac App 保持 1.10.6，截图、图片共享、语音与手势实现不变。
@@ -52,7 +54,7 @@ Toolbox 显示 App 的原图标与真实运行圆点，点击启动后展示 `Ro
 
 普通启动使用独立控制窗口；`--toolbox` 启动后台模式，保留原有授权和用户数据。退出 Toolbox 不会关闭该 App；在 Toolbox 中选择“退出 App”会正常退出输入路由并把输入交还 Mac。
 
-当前关键代码的审核哈希记录在 `core-baseline.json`。Windows 原生触控接收端为向前兼容的 1.1.3，更新保留原有登录任务、认证与连接配置。正式安装后只保留 `/Applications/DJF 输入路由.app`，删除临时 App 副本及旧版应用产物。
+当前关键代码的审核哈希记录在 `core-baseline.json`。Windows 原生触控接收端为向前兼容的 1.1.4，更新保留原有登录任务、认证与连接配置。正式安装后只保留 `/Applications/DJF 输入路由.app`，删除临时 App 副本及旧版应用产物。
 
 ## 1.7.0 修复与优化
 

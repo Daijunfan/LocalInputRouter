@@ -28,8 +28,15 @@ sealed class RoutedKeyboard : IDisposable {
  Hook callback;IntPtr hook;uint threadId;volatile bool enabled,resetRequested;
  long remaps;
  long screenshotMaskUntil;
+ volatile bool nativeKeyboard;
+ int nativeModifiers;
+ readonly HashSet<ushort> nativePressed=new HashSet<ushort>();
+ static readonly ushort[] modifierKeys={0xA2,0xA3,0x5B,0x5C,0xA0,0xA1,0xA4,0xA5};
+ long nativeKeyEvents,nativeModifierEvents;
+ public long NativeKeyEvents {get{return Interlocked.Read(ref nativeKeyEvents);}}
+ public long NativeModifierEvents {get{return Interlocked.Read(ref nativeModifierEvents);}}
  public long Remaps {get{return Interlocked.Read(ref remaps);}}
- public void SetEnabled(bool value){if(!value){resetRequested=true;Interlocked.Exchange(ref screenshotMaskUntil,0);}enabled=value;}
+ public void SetEnabled(bool value){if(!value){SetNativeKeyboard(false);resetRequested=true;Interlocked.Exchange(ref screenshotMaskUntil,0);}enabled=value;}
  public void PrepareLocalScreenshot(){Interlocked.Exchange(ref screenshotMaskUntil,DateTime.UtcNow.AddSeconds(10).Ticks);}
  public RoutedKeyboard() {
   worker=new Thread(Run){IsBackground=true,Name="DJF routed keyboard"};worker.Start();ready.WaitOne();
@@ -46,6 +53,9 @@ sealed class RoutedKeyboard : IDisposable {
    if(resetRequested){shortcut.Reset();resetRequested=false;}
    var key=(Key)Marshal.PtrToStructure(data,typeof(Key));
    if(key.extra.ToUInt64()!=OwnTag) {
+    if(nativeKeyboard && (key.flags&0x10)==0 && (key.code==0x11 || key.code==0xA2 || key.code==0xA3 || key.code==0x5B || key.code==0x5C)) {
+     Interlocked.Increment(ref nativeModifierEvents);return new IntPtr(1);
+    }
     if(enabled && (key.code==0x5B || key.code==0x5C) && (key.flags&0x80)!=0 && DateTime.UtcNow.Ticks<=Interlocked.Read(ref screenshotMaskUntil)) {
      Interlocked.Exchange(ref screenshotMaskUntil,0);
      var masked=ScreenshotReleaseInputs((ushort)key.code);
@@ -63,6 +73,42 @@ sealed class RoutedKeyboard : IDisposable {
   }
   return CallNextHookEx(hook,code,message,data);
  }
+ public void SetNativeKeyboard(bool value) {
+  nativeKeyboard=value;
+  if(!value) {
+   foreach(var key in nativePressed)Send(new[]{NativePress(key,true)});
+   nativePressed.Clear();SyncNativeModifiers(0,true);
+  }
+ }
+ public void NativeModifiers(int modifiers) {nativeKeyboard=true;SyncNativeModifiers(modifiers&15,false);}
+ void SyncNativeModifiers(int value,bool maskRelease) {
+  var input=new List<Input>();
+  for(int i=0;i<4;i++)if((nativeModifiers&(1<<i))!=0 && (value&(1<<i))==0) {
+   if(maskRelease && i>=2)input.AddRange(ScreenshotReleaseInputs(modifierKeys[i]));else input.Add(Press(modifierKeys[i],true));
+  }
+  for(int i=0;i<4;i++)if((nativeModifiers&(1<<i))==0 && (value&(1<<i))!=0)input.Add(Press(modifierKeys[i],false));
+  if(input.Count>0)Send(input.ToArray());nativeModifiers=value;
+ }
+ public void NativeKey(ushort key,bool down,int modifiers) {
+  if(!nativeKeyboard)return;
+  SyncNativeModifiers(modifiers&15,false);
+  // Shift/Alt remain native RDP input. Borrow their requested state for this
+  // chord event so independent RDP/SSH arrival times cannot change its meaning.
+  var input=new List<Input>();var restore=new List<Input>();
+  for(int i=4;i<8;i++) {
+   bool held=(GetAsyncKeyState(modifierKeys[i])&0x8000)!=0,wanted=(modifiers&(1<<i))!=0;
+   if(held!=wanted){input.Add(Press(modifierKeys[i],!wanted));restore.Add(Press(modifierKeys[i],!held));}
+  }
+  input.Add(NativePress(key,!down));input.AddRange(restore);Send(input.ToArray());
+  if(down)nativePressed.Add(key);else nativePressed.Remove(key);
+  Interlocked.Increment(ref nativeKeyEvents);
+ }
+ static Input NativePress(ushort key,bool up) {
+  return new Input{type=1,keyboard=new Keyboard{key=(ushort)(key&255),flags=(up?2u:0u)|((key&256)!=0?1u:0u),extra=new UIntPtr(OwnTag)}};
+ }
+ static void Send(Input[] input) {
+  if(SendInput((uint)input.Length,input,Marshal.SizeOf(typeof(Input)))!=input.Length)throw new Win32Exception(Marshal.GetLastWin32Error());
+ }
  public void Delete() {
   var controls=new List<ushort>();
   foreach(ushort key in new ushort[]{0xA2,0xA3,0x5B,0x5C})if((GetAsyncKeyState(key)&0x8000)!=0)controls.Add(key);
@@ -74,7 +120,7 @@ sealed class RoutedKeyboard : IDisposable {
   if(success)Interlocked.Increment(ref remaps);return success;
  }
  static Input Press(ushort key,bool up) {
-  uint flags=(up?2u:0u)|((key==0x2E || key==0xA3 || key==0x5B || key==0x5C)?1u:0u);
+  uint flags=(up?2u:0u)|((key==0x2E || key==0xA3 || key==0xA5 || key==0x5B || key==0x5C)?1u:0u);
   return new Input{type=1,keyboard=new Keyboard{key=key,flags=flags,extra=new UIntPtr(OwnTag)}};
  }
  public static Input[] DeleteInputs(ushort[] controls) {

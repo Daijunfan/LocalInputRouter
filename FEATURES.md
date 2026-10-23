@@ -5,7 +5,8 @@
 | 功能 | 当前实现与保留边界 | 验证 |
 |---|---|---|
 | 双轻触拖动窗口、抬指释放 | 已路由时使用 TapDrag；间隔可选 0.01–0.30 秒，默认 0.20 秒，自动保存；RDP 原生点击计数为 1 | 时间边界、设置生效与重置保留检查；原延迟点击与单次释放回归；用户已确认 1.9.11 拖动恢复 |
-| Command+X → Delete | 已路由或未路由但焦点在 DJF-Windows 远程窗口时，经现有认证触控通道发送；Windows 注入普通 Delete 并恢复 Ctrl 状态 | 路由／未路由窗口、语音、离线及其他组合键边界检查；Windows 原生钩子隔离检查 |
+| Command+⌫ → Delete | 已路由或未路由但焦点在 DJF-Windows 远程窗口时，经现有认证通道发送；Windows 注入普通 Delete 并恢复修饰键。字母 X 保持剪切 | 路由／未路由窗口、语音、离线及其他组合键边界检查；Windows 原生钩子隔离检查 |
+| Command / Control 完整互换 | 左右 Command 对应 Windows Ctrl，左右 Control 对应 Windows Win；未路由时只接管 DJF-Windows 的组合键，普通中文继续走原生 RDP | 共享修饰键投影、左右键、组合键保序、截图与语音隔离检查 |
 | Command+Backspace → Delete | 原映射保留，仍在明确路由到 Windows 时使用；未路由时保留原行为 | 原边界检查 |
 | Command/Control/Option | 已路由时仍为 Windows Ctrl/Windows/Alt；其他 Mac 窗口保留其键位 | 原 Deskflow 配置与修饰键实现保留 |
 | Fn 与右 Option 语音 | 已路由路径保留；未路由的前台 DJF-Windows 仅在主动按语音键时使用临时输入框，临时选择现有豆包输入法、结束恢复原输入法 | 原始触发键、组合键隔离和客户端收尾检查；真实语音单独验收 |

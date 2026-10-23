@@ -16,7 +16,7 @@ sealed class DeleteShortcut {
    else routedControls.Remove(ctrl);
    return false;
   }
-  if((key!=8 && key!=0x58) || !injected || extra!=0)return false;
+  if(key!=8 || !injected || extra!=0)return false;
   if(up){bool consume=swallowed;swallowed=false;return consume;}
   if(!enabled || otherModifier || physicalControls.Count!=0 || routedControls.Count==0)return false;
   controls=new ushort[routedControls.Count];routedControls.CopyTo(controls);swallowed=true;return true;

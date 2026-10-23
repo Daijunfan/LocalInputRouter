@@ -34,8 +34,8 @@ static class WindowsBindingsChecks {
   Check(!shortcut.Handle(8,0x10,0x444A4656,true,false,out controls),"Voice text injections must be untouched");
   Check(!shortcut.Handle(8,0x10,0,false,false,out controls),"Disconnected receiver must not remap keys");
   shortcut.Reset();shortcut.Handle(0xA2,0x10,0,true,false,out controls);
-  Check(shortcut.Handle(0x58,0x10,0,true,false,out controls),"Routed Command+X must also map to Delete");
-  Check(shortcut.Handle(0x58,0x90,0,true,false,out controls),"Command+X release must be consumed");
+  Check(!shortcut.Handle(0x58,0x10,0,true,false,out controls),"Routed Command+letter X must remain Cut");
+  Check(!shortcut.Handle(0x58,0x90,0,true,false,out controls),"Command+letter X release must remain native");
   shortcut.Reset();shortcut.Handle(0xA2,0,0,true,false,out controls);
   Check(!shortcut.Handle(0x58,0,0,true,false,out controls),"Physical Windows Ctrl+X must remain Cut");
   Check(RoutedKeyboard.DeleteInputs(new ushort[0]).Length==2,"Native RDP Delete must be balanced without Ctrl held");

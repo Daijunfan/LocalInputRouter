@@ -1,6 +1,6 @@
 # Native trackpad bridge
 
-Receiver 1.1.3 retains native touchpad routing and the authenticated local-screenshot menu mask, and releases held RDP Win modifiers while sending an authenticated `delete`. Its handshake advertises `deleteKey` and `localScreenshots`; old clients remain supported. Windows App handles the native RDP pointer without a second cursor window.
+Receiver 1.1.4 retains native touchpad routing and the authenticated local-screenshot menu mask, and releases held RDP Win modifiers while sending an authenticated `delete`. Its handshake advertises `deleteKey` and `localScreenshots`; old clients remain supported. Windows App handles the native RDP pointer without a second cursor window.
 
 The Mac router and Windows physical-mouse utility are independent.
 
@@ -36,7 +36,9 @@ csc.exe /target:winexe /r:System.Web.Extensions.dll /out:TrackpadReceiver.exe Na
 ```
 
 `ScrollChecks.cs` + `NativeScroll.cs` run pure conversion checks without injecting input. Mac `InputRouter/PrecisionChecks.swift` checks gain, momentum forwarding and local-input isolation without taking over input. 1.4.1 installation verified the new capability, UI input/apply, and an authenticated receiver in the user desktop session. Physical scrolling/pinch acceptance is pending user feedback.
-# Windows 接收端 1.1.3
+# Windows 接收端 1.1.4
+
+1.1.4 增加原生 RDP 组合键能力 `nativeKeys`，复用认证端口处理 `nativeKeyboard`、`nativeModifiers` 和 `nativeKey` 消息。Mac 按同一投影生成左右 Ctrl/Win 状态，键事件与修饰键在同一流中保序；仅在当前 DJF-Windows 原生 RDP 窗口启用。接收端过滤重复的 RDP Ctrl/Win，保留有独立标记的实体键盘和语音输入。关闭或断开时释放本通道按住的按键。Command+⌫ 发送 Delete，字母 X 保持剪切。
 
 1.1.3 的认证 Delete 请求同时处理已按住的 Ctrl 与 Win：先释放再发送普通 Delete，最后恢复，并为 Win 的释放添加无字符掩码。修复未路由 Command+X 在文件管理器中失效；原有路由 Ctrl 删除、实体键盘快捷键与截图请求保持兼容。
 
@@ -44,8 +46,8 @@ csc.exe /target:winexe /r:System.Web.Extensions.dll /out:TrackpadReceiver.exe Na
 
 三指左右滑动在 Windows 接收端转换为四指原生触控输入，沿用 Windows 原有桌面切换。三指纵向、三指轻点与真正四指输入保留各自行为。识别只保存开始帧，方向确定后继续原生注入，不增加持续帧缓冲。
 
-Mac Command 已由原路由映射为 Windows Ctrl。本接收端把路由注入的 Ctrl+Backspace／Ctrl+X 转为普通 Delete，并接受 Mac 前台 DJF-Windows 窗口的认证 Delete 请求；发送 Delete 前临时释放该路由 Ctrl，随后恢复，并成对发送按下/松开。Windows 实体键盘的 Ctrl+Backspace、其他修饰键组合及语音文字注入保留原用途。
+Mac Command 已由原路由映射为 Windows Ctrl。本接收端把路由注入的 Ctrl+Backspace 转为普通 Delete，并接受 Mac 前台 DJF-Windows 窗口的认证 Delete 请求；发送 Delete 前临时释放该路由 Ctrl，随后恢复，并成对发送按下/松开。Windows 实体键盘的 Ctrl+Backspace、其他修饰键组合及语音文字注入保留原用途。
 
-部署源码：`Receiver.cs`、`NativeTouchpad.cs`、`NativeScroll.cs`、`ThreeFingerDesktop.cs`、`DeleteShortcut.cs`、`RoutedKeyboard.cs`。将这些文件及 `WindowsBindingsChecks.cs` 放到 Windows `%LOCALAPPDATA%\DJF-Windows\updates\receiver-1.1.3`，执行 `install-windows-bindings.ps1`。脚本先编译并运行检查，再更新当前接收端，复用原有登录任务。安装不修改 Mac 程序或设置。
+部署源码：`Receiver.cs`、`NativeTouchpad.cs`、`NativeScroll.cs`、`ThreeFingerDesktop.cs`、`DeleteShortcut.cs`、`RoutedKeyboard.cs`。将这些文件及 `WindowsBindingsChecks.cs` 放到 Windows `%LOCALAPPDATA%\DJF-Windows\updates\receiver-1.1.4`，执行 `install-windows-bindings.ps1`。脚本先编译并运行检查，再更新当前接收端，复用原有登录任务。安装不修改 Mac 程序或设置。
 
 已通过纯映射检查及原生低级按键测试；测试器拦住 Delete，确保不删除用户文件。详细结果见项目根目录 `verification.json`。

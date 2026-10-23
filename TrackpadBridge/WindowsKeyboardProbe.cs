@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Web.Script.Serialization;
@@ -16,9 +17,16 @@ static class WindowsKeyboardProbe {
  [DllImport("user32.dll")] static extern uint SendInput(uint count,RoutedKeyboard.Input[] input,int size);
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern IntPtr GetModuleHandle(string module);
  static IntPtr handle;static Hook callback;static bool testing,deleteHadCtrl,deleteHadWin,restored=true;static int deletes;
+ static readonly List<int> nativeMasks=new List<int>();
+ static readonly int[] expectedMasks={1,2,4,8,85};
+ static bool NativePassed(){return nativeMasks.Count==expectedMasks.Length && string.Join(",",nativeMasks)==string.Join(",",expectedMasks);}
  static IntPtr Observe(int code,IntPtr message,IntPtr data) {
   if(code>=0 && testing) {
    var key=(Key)Marshal.PtrToStructure(data,typeof(Key));
+   if(key.code==0x7F && key.extra.ToUInt64()==RoutedKeyboard.OwnTag) {
+    if((key.flags&0x80)==0){int mask=0,index=0;foreach(int modifier in new[]{0xA2,0xA3,0x5B,0x5C,0xA0,0xA1,0xA4,0xA5}){if((GetAsyncKeyState(modifier)&0x8000)!=0)mask|=1<<index;index++;}nativeMasks.Add(mask);}
+    return new IntPtr(1);
+   }
    if(key.code==0x2E && key.extra.ToUInt64()==RoutedKeyboard.OwnTag) {
     if((key.flags&0x80)==0){deletes++;deleteHadCtrl|=(GetAsyncKeyState(0x11)&0x8000)!=0;deleteHadWin|=(GetAsyncKeyState(0x5B)&0x8000)!=0 || (GetAsyncKeyState(0x5C)&0x8000)!=0;}
     return new IntPtr(1);
@@ -58,13 +66,14 @@ static class WindowsKeyboardProbe {
    else if(phase==14){SendInput(2,new[]{Press(0xA2,false),Press(0x5B,false)},40);}
    else if(phase==15){native.Delete();}
    else if(phase==16){restored&=(GetAsyncKeyState(0x11)&0x8000)!=0 && (GetAsyncKeyState(0x5B)&0x8000)!=0;SendInput(1,new[]{Press(0xA2,true)},40);var input=RoutedKeyboard.ScreenshotReleaseInputs(0x5B);SendInput((uint)input.Length,input,40);}
+   else if(phase>=17 && phase<22){int mask=expectedMasks[phase-17];native.NativeModifiers(mask);native.NativeKey(0x7F,true,mask);native.NativeKey(0x7F,false,mask);native.SetNativeKeyboard(false);}
    else {
     released=(GetAsyncKeyState(0x11)&0x8000)==0 && (GetAsyncKeyState(0x5B)&0x8000)==0 && (GetAsyncKeyState(0x5C)&0x8000)==0;
-    timer.Stop();File.WriteAllText(result,new JavaScriptSerializer().Serialize(new{pass=deletes==7 && !deleteHadCtrl && !deleteHadWin && released && restored,deleteEvents=deletes,deleteHadCtrl=deleteHadCtrl,deleteHadWin=deleteHadWin,modifiersReleased=released,modifiersRestored=restored}));Application.ExitThread();
+    timer.Stop();File.WriteAllText(result,new JavaScriptSerializer().Serialize(new{pass=deletes==6 && !deleteHadCtrl && !deleteHadWin && released && restored && NativePassed(),deleteEvents=deletes,deleteHadCtrl=deleteHadCtrl,deleteHadWin=deleteHadWin,modifiersReleased=released,modifiersRestored=restored,nativeMasks=nativeMasks}));Application.ExitThread();
    }
    phase++;
   };
   try{timer.Start();Application.Run();}finally{UnhookWindowsHookEx(handle);timer.Dispose();native.Dispose();}
-  return deletes==7 && !deleteHadCtrl && !deleteHadWin && released && restored?0:1;
+  return deletes==6 && !deleteHadCtrl && !deleteHadWin && released && restored && NativePassed()?0:1;
  }
 }
