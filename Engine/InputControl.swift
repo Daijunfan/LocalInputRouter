@@ -491,7 +491,7 @@ final class InputControl: @unchecked Sendable {
                 && (key == kVK_ANSI_X || key == kVK_Delete)
             lock.unlock()
             if routeVoice { if let copy = event.copy() { onVoiceEvent?(copy) }; return MacVoiceEvents.local(event) }
-            if delete && (remote || (key == kVK_ANSI_X && canUseNativeViewerShortcuts?() == true)) {
+            if delete && (remote || canUseNativeViewerShortcuts?() == true) {
                 lock.lock(); swallowed.insert(key); lock.unlock()
                 onDelete?(); return nil
             }

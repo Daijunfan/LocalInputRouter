@@ -73,29 +73,36 @@ import Carbon
         for routed in [false, true] {
             control.confirm(routed ? .windows : .mac); control.setRDPPointer(true)
             for key in [kVK_ANSI_X, kVK_Delete] {
-                let mapped = routed || key == kVK_ANSI_X
-                precondition(handle(key, .keyDown, .maskCommand) == !mapped)
-                precondition(handle(key, .keyUp) == !mapped)
+                precondition(!handle(key, .keyDown, .maskCommand))
+                precondition(!handle(key, .keyUp))
             }
         }
-        precondition(deletes == 3)
+        precondition(deletes == 4)
         control.confirm(.mac); control.setRDPPointer(false); viewerFocused = false
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 3)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 4, "Mac Command+Backspace must retain its native purpose outside the DJF viewer")
         control.setRDPPointer(true)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 3, "A stale viewer cache must not delete in another app")
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4, "A stale viewer cache must not delete in another app")
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 4)
         control.setRDPPointer(false); viewerFocused = true
-        precondition(!handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4, "A newly focused DJF viewer must not wait for the pointer cache")
+        precondition(!handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 5, "A newly focused DJF viewer must not wait for the pointer cache")
         precondition(!handle(kVK_ANSI_X, .keyUp))
+        precondition(!handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6, "The observed Command+Backspace chord must work in an unrouted DJF viewer")
+        precondition(!handle(kVK_Delete, .keyUp))
         control.setRDPPointer(true); control.setDeleteEnabled(false)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 6)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6)
         control.setDeleteEnabled(true); control.setVoiceCapture(true)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 6)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6)
         control.setVoiceCapture(false)
         for flags in [CGEventFlags.maskControl, [.maskCommand, .maskShift], [.maskCommand, .maskAlternate]] {
-            precondition(handle(kVK_ANSI_X, .keyDown, flags) && deletes == 4)
+            precondition(handle(kVK_ANSI_X, .keyDown, flags) && deletes == 6)
+            precondition(handle(kVK_Delete, .keyDown, flags) && deletes == 6)
         }
         control.configure(available: false, pid: 0)
-        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 4)
+        precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand) && deletes == 6)
+        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 6)
         control.configure(available: true, pid: getpid())
         print("PASS: Command delete aliases work in routed and unrouted DJF viewers; other apps, unavailable receivers, speech and other chords remain native")
 

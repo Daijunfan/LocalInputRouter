@@ -65,8 +65,8 @@ sign(helpers / 'VoicePassthrough.dylib')
 with (bundle / 'Contents/Info.plist').open('wb') as handle:
     plistlib.dump({'CFBundleIdentifier': 'com.djf.inputrouter', 'CFBundleName': 'DJF 输入路由',
         'CFBundleDisplayName': 'DJF 输入路由', 'CFBundleExecutable': 'DJFInputRouter',
-        'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '1.10.6',
-        'CFBundleVersion': '51', 'CFBundleIconFile': 'AppIcon', 'NSHighResolutionCapable': True,
+        'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '1.10.7',
+        'CFBundleVersion': '52', 'CFBundleIconFile': 'AppIcon', 'NSHighResolutionCapable': True,
         'LSUIElement': True,
         'NSBluetoothAlwaysUsageDescription': '通过已配对的 DJF-Windows 蓝牙连接转发键盘与触控板，Mac 仍可连接校园 Wi-Fi。',
         'NSPrincipalClass': 'NSApplication'}, handle)
