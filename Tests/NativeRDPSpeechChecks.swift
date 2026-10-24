@@ -69,7 +69,7 @@ import Carbon
         control.setDeleteEnabled(true)
         var deletes = 0; control.onDelete = { deletes += 1 }
         var viewerFocused = true
-        control.canUseNativeViewerShortcuts = { viewerFocused }
+        control.canUseNativeViewerShortcuts = { _ in viewerFocused }
         for routed in [false, true] {
             control.confirm(routed ? .windows : .mac); control.setRDPPointer(true)
             precondition(handle(kVK_ANSI_X, .keyDown, .maskCommand), "Letter X keeps standard Cut")
@@ -94,9 +94,11 @@ import Carbon
             precondition(handle(kVK_Delete, .keyDown, flags) && deletes == 3)
         }
         control.configure(available: false, pid: 0)
-        precondition(handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 3)
+        precondition(!handle(kVK_Delete, .keyDown, .maskCommand) && deletes == 4,
+                     "A ready native receiver must not depend on Deskflow's connection")
+        precondition(!handle(kVK_Delete, .keyUp))
         control.configure(available: true, pid: getpid())
-        print("PASS: Command+Backspace deletes in both modes; letter X, other apps, unavailable receivers and voice keep their original meaning")
+        print("PASS: Command+Backspace deletes in both modes and during backend recovery; letter X, other apps and voice keep their original meaning")
 
         control.confirm(.mac); viewerFocused = true
         var screenshots = 0; control.onViewerScreenshot = { screenshots += 1 }
@@ -147,12 +149,23 @@ import Carbon
         let count=keys.count
         precondition(handle(kVK_ANSI_A,.keyDown), "Ordinary native RDP Unicode input must stay native")
         precondition(handle(kVK_ANSI_2,.keyDown,.maskCommand) && keys.count == count, "Mac screenshot shortcut must stay local")
-        precondition(deletes == 3, "Command+letter X must not invoke Delete")
+        precondition(deletes == 4, "Command+letter X must not invoke Delete")
         viewerFocused=false
         precondition(handle(kVK_ANSI_C,.keyDown,.maskCommand) && keys.count == count)
         viewerFocused=true;control.setVoiceCapture(true)
         precondition(handle(kVK_ANSI_C,.keyDown,.maskCommand) && keys.count == count)
-        control.setVoiceCapture(false);control.setNativeKeysReady(false)
+        control.setVoiceCapture(false)
+        control.configure(available: false, pid: 0); control.setNativeRDPKeyboard(false)
+        precondition(handle(kVK_Command,.flagsChanged,.maskCommand) && modifiers.last == 1)
+        precondition(!handle(kVK_ANSI_C,.keyDown,.maskCommand),
+                     "The first native chord must work before the focus cache or backend is ready")
+        precondition(!handle(kVK_ANSI_C,.keyUp,.maskCommand))
+        precondition(handle(kVK_Command,.flagsChanged) && modifiers.last == 0)
+        viewerFocused=false
+        precondition(handle(kVK_ANSI_C,.keyDown,.maskCommand), "Recovery must not capture another Mac app")
+        viewerFocused=true; control.setNativeKeysReady(false)
+        precondition(handle(kVK_ANSI_C,.keyDown,.maskCommand), "A disconnected native channel cannot consume input")
+        control.configure(available: true, pid: getpid())
         print("PASS: left/right Command and Control fully exchange; all shortcut keys share one projection; screenshot, Unicode, voice and other apps remain native")
 
         control.setRDPPointer(true); control.setNativeGestures(true); control.setMacScroll(true)

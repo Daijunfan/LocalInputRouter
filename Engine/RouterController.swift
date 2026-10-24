@@ -135,15 +135,7 @@ final class RouterController: ObservableObject {
         controls.onNativeModifiers = { touchBridge.nativeModifiers($0) }
         controls.onNativeKey = { touchBridge.nativeKey($0, down: $1, modifiers: $2) }
         controls.onViewerScreenshot = { touchBridge.prepareLocalScreenshot() }
-        controls.canUseNativeViewerShortcuts = { [weak self] in
-            DispatchQueue.main.sync {
-                MainActor.assumeIsolated {
-                    guard let self else { return false }
-                    self.updateRDPPointer()
-                    return self.connected && self.destination == .mac && self.rdpPointer && !self.voice.isPrepared
-                }
-            }
-        }
+        controls.canUseNativeViewerShortcuts = { RemoteDesktopMode.focusedViewer(rdpOnly: $0) }
         controls.onScroll = { x, y, begin in touchBridge.scroll(x: x, y: y, begin: begin) }
         voice.onActive = { [weak self] active in
             if !active, let self, self.destination == .mac, self.voice.isActive { return }

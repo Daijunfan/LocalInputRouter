@@ -104,7 +104,7 @@ final class InputControl: @unchecked Sendable {
     var onDelete: (() -> Void)?
     var onNativeModifiers: ((Int) -> Void)?
     var onNativeKey: ((UInt16, Bool, Int) -> Void)?
-    var canUseNativeViewerShortcuts: (() -> Bool)?
+    var canUseNativeViewerShortcuts: ((_ rdpOnly: Bool) -> Bool)?
     var onViewerScreenshot: (() -> Void)?
     var isInstalled: Bool { tap != nil && guardTap != nil }
     var recoveryReason: String {
@@ -139,9 +139,10 @@ final class InputControl: @unchecked Sendable {
     func setNativeKeysReady(_ value: Bool) { lock.lock(); nativeKeysReady = value; lock.unlock() }
     func setNativeRDPKeyboard(_ value: Bool) { lock.lock(); nativeRDPKeyboard = value; lock.unlock() }
     private func nativeKeyboardViewer() -> Bool {
-        guard canUseNativeViewerShortcuts?() == true else { return false }
-        lock.lock(); defer { lock.unlock() }
-        return available && confirmed == .mac && nativeKeysReady && nativeRDPKeyboard && !voiceCapture
+        lock.lock()
+        let enabled = confirmed == .mac && nativeKeysReady && !voiceCapture
+        lock.unlock()
+        return enabled && canUseNativeViewerShortcuts?(true) == true
     }
     func setRDPPointer(_ value: Bool) { lock.lock(); rdpPointer = value; gain.reset(); lock.unlock() }
     func setVoiceEnabled(_ value: Bool) {
@@ -336,7 +337,7 @@ final class InputControl: @unchecked Sendable {
         let canVoice = voiceEnabled
         let nativeSpeech = available && !remote && rdpPointer && canVoice
         let nativeViewer = available && !remote && rdpPointer && !voice
-        let nativeKeyboard = available && !remote && nativeKeysReady && !voice
+        let nativeKeyboard = !remote && nativeKeysReady && !voice
         let nativePointerModifiers = nativeKeyboard && nativeRDPKeyboard && rdpPointer
         let speechTarget = remote || nativeSpeech
         let multipleContacts = contacts >= 2
@@ -515,12 +516,12 @@ final class InputControl: @unchecked Sendable {
         let escape = emergencyShortcut.matches(key, flags: event.flags)
         guard type == .keyDown && (toggle || escape) else {
             let routeVoice = speechTarget && voiceCapture && (type == .keyDown || type == .keyUp)
-            let delete = available && deleteEnabled && !voiceCapture && type == .keyDown
+            let delete = deleteEnabled && !voiceCapture && type == .keyDown
                 && event.flags.intersection(RouterShortcut.modifierMask) == .maskCommand
                 && key == kVK_Delete
             lock.unlock()
             if routeVoice { if let copy = event.copy() { onVoiceEvent?(copy) }; return MacVoiceEvents.local(event) }
-            if delete && (remote || canUseNativeViewerShortcuts?() == true) {
+            if delete && (remote || canUseNativeViewerShortcuts?(false) == true) {
                 lock.lock(); swallowed.insert(key); lock.unlock()
                 onDelete?(); return nil
             }

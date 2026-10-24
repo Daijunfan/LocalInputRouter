@@ -18,6 +18,30 @@ enum RemoteDesktopMode: String {
     static func nativePointer(bundle: String, title: String, destination: InputDestination) -> Bool {
         matches(bundle: bundle, title: title) && (bundle == rdp.bundleIdentifier || destination == .mac)
     }
+
+    // The HID callback must not wait for AppKit's main queue. Read the actual
+    // focused window directly, with a bounded timeout on each AX object.
+    static func focusedViewer(rdpOnly: Bool = false) -> Bool {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.02)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedApplicationAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return false }
+        let app = unsafeBitCast(value, to: AXUIElement.self)
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(app, &pid) == .success,
+              let bundle = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier,
+              isViewer(bundle), !rdpOnly || bundle == rdp.bundleIdentifier else { return false }
+        AXUIElementSetMessagingTimeout(app, 0.02)
+        var window: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &window) == .success,
+              let window, CFGetTypeID(window) == AXUIElementGetTypeID() else { return false }
+        let focused = unsafeBitCast(window, to: AXUIElement.self)
+        AXUIElementSetMessagingTimeout(focused, 0.02)
+        var title: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focused, kAXTitleAttribute as CFString, &title) == .success else { return false }
+        return matches(bundle: bundle, title: title as? String ?? "")
+    }
 }
 
 enum ConsoleDesktop {

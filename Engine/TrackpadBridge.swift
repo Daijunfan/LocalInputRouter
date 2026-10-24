@@ -127,7 +127,8 @@ final class TrackpadBridge: @unchecked Sendable {
     }
     func nativeKey(_ key: UInt16, down: Bool, modifiers: Int) {
         queue.async {
-            guard self.ready, self.nativeKeys, self.nativeKeyboard else { return }
+            guard self.ready, self.nativeKeys else { return }
+            self.enableNativeKeyboard()
             self.send(["type":"nativeKey", "key":Int(key), "down":down, "modifiers":modifiers]); self.nativeKeyEvents += 1
         }
     }
@@ -146,7 +147,8 @@ final class TrackpadBridge: @unchecked Sendable {
     private func viewerRequest(type: String, fields: [String: Any], native: Bool) {
         let request = UUID().uuidString, reply = DispatchSemaphore(value: 0)
         queue.async {
-            guard self.ready, native ? self.nativeKeys && self.nativeKeyboard : self.localScreenshots else { reply.signal(); return }
+            guard self.ready, native ? self.nativeKeys : self.localScreenshots else { reply.signal(); return }
+            if native { self.enableNativeKeyboard() }
             self.screenshotReply = (request, reply, native)
             self.send(fields.merging(["type":type,"request":request]) { _,new in new })
         }
@@ -154,6 +156,12 @@ final class TrackpadBridge: @unchecked Sendable {
         // ahead of the receiver's mask. Mac Command events always pass unchanged.
         _ = reply.wait(timeout: .now() + 0.1)
         queue.async { if self.screenshotReply?.0 == request { self.screenshotReply = nil } }
+    }
+    private func enableNativeKeyboard() {
+        if !nativeKeyboard {
+            nativeKeyboard = true
+            send(["type":"nativeKeyboard", "enabled":true])
+        }
     }
     var snapshot: [String: Any] {
         queue.sync { ["ready": ready, "frames": sentFrames, "maxContacts": maximumContacts,

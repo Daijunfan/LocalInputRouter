@@ -1,8 +1,8 @@
 {
-  "InputControl.swift": "c05f88feef842ab3456317f5c74231325abff7703e599ee0500ffd11527999de",
+  "InputControl.swift": "4eecb3a9e04c482188ca2b29427b3900342a68d9a9f2fb68d295b17efe3c6721",
   "TapDrag.swift": "c1bf74782619eb92fadbe124f61666b731309efdab3e386acac817e39e08bf77",
   "LocalCursor.swift": "e78de3fa7a9704d0d990db36bb03832b2ac7e3917db201139d1d770184486bbb",
-  "TrackpadBridge.swift": "cdd6fba4a0ac16d6b591c16fae8792a541500f5d45ad240088de2cf724c737a2",
+  "TrackpadBridge.swift": "85b1432669122640dcd665872907cc6f584279984335e4e4fb13100a2040146b",
   "VoiceBridge.swift": "d42f902d22d60cf4e95cb7d5556a345aa01446860d1115018eaac949b672a50b",
   "VoiceTransport.swift": "cefc456fd3354f16283b5b17a3fdceed9324c5d9f4474d273d9562dc4e5046a1",
   "VoiceTextView.swift": "597651e90a137f6e4fb19273a15db1b95cf03be8fa552e39bb962dd9e3a8e5a7",
@@ -12,6 +12,6 @@
   "Cursor.c": "6be481fa7880a45d7b6db3bce2a9fa7b5871f062387a984d59a59847faed022d",
   "GestureFrameGate.swift": "d741bc3c6c0193b0f754db9002e5c261f63f2d8605c016f988015eafa529605e",
   "ThreeFingerDoubleTap.swift": "6da9e80494f754feee9d5f71fbde1f7d9a5e6bfe6ee4eb1db9bd9a6266a67519",
-  "ConsoleDesktop.swift": "6e76d66cf56cd7a599f094ff8625c1412f2ca15d56a0fac8b6a98acd9132a57d",
+  "ConsoleDesktop.swift": "b870c6fa78bc711c85c9cb96d3a04860c0437a22f3d3a1b615feb41372c56409",
   "ConsoleWindow.swift": "864cce6cf996f6d65abe371fbb1a9a6c01da6d45804a6df56203a1a661e10c9e"
 }

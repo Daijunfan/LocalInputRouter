@@ -18,6 +18,14 @@ import AppKit
         precondition(control.guardLocal(mouse) == nil, "Routed console input must not activate Mac fullscreen edges")
         control.confirm(.mac)
         precondition(control.guardLocal(mouse) != nil, "Unrouted console input remains local to the viewer")
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInteractive).async {
+            _ = RemoteDesktopMode.focusedViewer()
+            finished.signal()
+        }
+        precondition(finished.wait(timeout: .now() + 0.5) == .success,
+                     "The HID focus check must complete while AppKit's main queue is blocked")
         print("PASS: RDP pointer behavior retained; console routing blocks local edges; unrouted viewer input preserved")
+        print("PASS: shortcut focus check does not wait for the AppKit main queue")
     }
 }
