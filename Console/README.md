@@ -28,4 +28,4 @@ esbuild Console/viewer.js --bundle --minify --format=esm --outfile=Console/viewe
 
 显示守护升级：将 `ConsoleDisplay.cs`、兼容入口 `ConsoleDisplay.ps1` 与 `install-display-agent.ps1` 放在同一目录，在 DJF-Windows 的管理员 PowerShell 中执行安装脚本。`-Observe` 仅记录显示通道，不启用修复或恢复虚拟设备。策略和 Win32 结构布局由 `Tests/ConsoleDisplayChecks.cs` 在 Windows 的 .NET Framework 编译器下验证。
 
-2026-10-24 软件侧验证：Windows 编译与策略检查通过；已确认用户重启后的任务自动启动、实体主屏与虚拟屏共同启用、工作进程退出后自动恢复。实体面板实际亮屏仍未通过现场确认，不能用 API 的启用状态代替这一项验收。
+2026-10-24 软件侧验证：Windows 编译与策略检查通过；已确认用户重启后的任务自动启动、实体主屏与虚拟屏共同启用、工作进程退出后自动恢复。用户已通过显示器底部摇杆开机，并确认实体画面恢复；API 的启用状态仍不能代替实际亮屏验收。
