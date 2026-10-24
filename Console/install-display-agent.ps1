@@ -1,3 +1,4 @@
+param([switch]$Observe)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 if ($env:COMPUTERNAME -ne 'DJF') { throw 'This installer is only for DJF-Windows.' }
@@ -6,8 +7,12 @@ $devices = @(Get-PnpDevice -Class Display | Where-Object {
 })
 if ($devices.Count -ne 1) { throw 'Cannot identify the installed console display device.' }
 $root = 'C:\ProgramData\DJF-Windows\ConsoleDisplay'
+$compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+$output = Join-Path $PSScriptRoot 'ConsoleDisplay.exe'
+& $compiler /nologo /platform:x64 /target:winexe /r:System.Web.Extensions.dll /out:$output (Join-Path $PSScriptRoot 'ConsoleDisplay.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Console display component did not compile.' }
 New-Item -ItemType Directory -Force $root | Out-Null
-# A SYSTEM task must execute an administrator-owned script.
+# A SYSTEM task must execute an administrator-owned component.
 $acl = New-Object Security.AccessControl.DirectorySecurity
 $acl.SetAccessRuleProtection($true,$false)
 foreach ($sid in 'S-1-5-18','S-1-5-32-544') {
@@ -15,11 +20,24 @@ foreach ($sid in 'S-1-5-18','S-1-5-32-544') {
     $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($identity,'FullControl','ContainerInherit,ObjectInherit','None','Allow')))
 }
 Set-Acl $root $acl
+$name = 'DJF-Windows-Console-Display'
+if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $name }
+# The worker exits when its broker stops. Do not replace a running executable.
+for ($i=0; $i -lt 30 -and (Get-Process ConsoleDisplay -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }
+if (Get-Process ConsoleDisplay -ErrorAction SilentlyContinue) { throw 'The previous display component has not stopped.' }
+Copy-Item $output (Join-Path $root 'ConsoleDisplay.exe') -Force
 Copy-Item (Join-Path $PSScriptRoot 'ConsoleDisplay.ps1') (Join-Path $root 'ConsoleDisplay.ps1') -Force
-$arguments = '-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File "'+$root+'\ConsoleDisplay.ps1" -DeviceId "'+$devices[0].InstanceId+'"'
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
+$arguments = '--broker "'+$devices[0].InstanceId+'"'
+if ($Observe) { $arguments += ' --observe' }
+$action = New-ScheduledTaskAction -Execute (Join-Path $root 'ConsoleDisplay.exe') -Argument $arguments
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-Register-ScheduledTask -TaskName 'DJF-Windows-Console-Display' -Action $action -Principal $principal -Settings $settings -Trigger (New-ScheduledTaskTrigger -AtStartup) -Force | Out-Null
-Start-ScheduledTask -TaskName 'DJF-Windows-Console-Display'
-Get-ScheduledTask -TaskName 'DJF-Windows-Console-Display' | Select-Object TaskName,State | ConvertTo-Json -Compress
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
+$triggers = @((New-ScheduledTaskTrigger -AtStartup), (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)))
+Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Trigger $triggers -Force | Out-Null
+# Undo the old agent's disabled virtual adapter once. The new agent never toggles adapters.
+$disabled = Get-CimInstance Win32_VideoController | Where-Object { $_.PNPDeviceID -eq $devices[0].InstanceId -and $_.ConfigManagerErrorCode -eq 22 }
+if (!$Observe -and $disabled) {
+    Enable-PnpDevice -InstanceId $devices[0].InstanceId -Confirm:$false
+}
+Start-ScheduledTask -TaskName $name
+Get-ScheduledTask -TaskName $name | Select-Object TaskName,State | ConvertTo-Json -Compress
