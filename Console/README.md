@@ -10,7 +10,9 @@ Windows App 的 RDP 独立会话继续保留。机箱 USB 键盘也可通过独�
 
 无 HDMI 时使用已签名的 Virtual Display Driver 提供 1920×1080 画面。`DJF-Windows-Console-Display` 是 Windows 本机的 SYSTEM 开机任务，直接运行 `ConsoleDisplay.exe`，不依赖 Mac、SSH、网络或 PowerShell 常驻。工作进程跟随实体控制台，登录前与 RDP 连接期间均可检查 `QueryDisplayConfig` 的实际输出；实体屏缺失时保留已有显示路径和模式，只补上可用的实体输出。虚拟与 RDP 显示器按适配器身份区分，不再因插入 HDMI 停用虚拟设备。安装时恢复旧守护停用的虚拟设备。
 
-实体屏接入时，控制台工作进程申请 `ES_DISPLAY_REQUIRED`，避免 RDP 中的输入无法唤醒实体锁屏、显示器自动关屏；拔掉实体屏后释放请求。开机或热插拔时向驱动重新下发模式，避免已标记启用的 HDMI 通道停留在黑屏状态。实体屏作为主屏显示本地登录和锁屏，虚拟屏的分辨率和屏幕间相对位置保持不变。它不改电源计划、系统睡眠、屏保、显卡驱动或全局 PowerShell 策略。任务有开机触发、每分钟检查及进程失败重启；`broker.json` 和 `display-status.json` 记录控制台会话、实际显示通道、修复次数与心跳。
+实体屏接入时，控制台工作进程申请 `ES_DISPLAY_REQUIRED`；拔掉实体屏后释放请求。安装时另将当前电源计划接交流电时的 `VIDEOIDLE`（普通自动关屏）与 `VIDEOCONLOCK`（锁屏自动关屏）设为 0，即从不关屏。锁屏有独立的默认 60 秒关屏策略，不能仅凭亮屏请求判断它已关闭；显示器继续显示锁屏，登录验证仍由 Windows 处理。电池、系统睡眠、屏保、显卡驱动和全局 PowerShell 策略保持原设置。
+
+开机或热插拔时向驱动重新下发模式，避免已标记启用的 HDMI 通道停留在黑屏状态。实体屏作为主屏显示本地登录和锁屏，虚拟屏的分辨率和屏幕间相对位置保持不变。任务有开机触发、每分钟检查及进程失败重启；`broker.json` 和 `display-status.json` 记录控制台会话、实际显示通道、修复次数与心跳。
 
 源码与部署：`install.ps1` 安装官方签名 TightVNC；`ConsoleDesktop.ps1` 校验 DJF 主机并连接现有控制台；`install-display.ps1` 部署签名显示驱动；`install-display-agent.ps1` 编译并安装自动显示任务；`install-macos.py` 为已有独立桌面隧道增加画面转发。设备认证配置沿用现有每用户目录。PowerShell 的 RemoteSigned 仅作用于这些子进程。
 

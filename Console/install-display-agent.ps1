@@ -6,6 +6,16 @@ $devices = @(Get-PnpDevice -Class Display | Where-Object {
     (Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName 'DEVPKEY_Device_HardwareIds' -ErrorAction SilentlyContinue).Data -contains 'Root\MttVDD'
 })
 if ($devices.Count -ne 1) { throw 'Cannot identify the installed console display device.' }
+# A locked console has its own timeout; a display execution request alone does
+# not replace this policy. Keep the mains-powered recovery screen visible.
+if (!$Observe) {
+    foreach ($setting in 'VIDEOIDLE', 'VIDEOCONLOCK') {
+        & powercfg.exe /setacvalueindex SCHEME_CURRENT SUB_VIDEO $setting 0
+        if ($LASTEXITCODE -ne 0) { throw "Could not disable AC display timeout: $setting" }
+    }
+    & powercfg.exe /setactive SCHEME_CURRENT
+    if ($LASTEXITCODE -ne 0) { throw 'Could not apply the display power settings.' }
+}
 $root = 'C:\ProgramData\DJF-Windows\ConsoleDisplay'
 $compiler = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $output = Join-Path $PSScriptRoot 'ConsoleDisplay.exe'
