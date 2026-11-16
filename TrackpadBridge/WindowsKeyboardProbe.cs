@@ -16,7 +16,7 @@ static class WindowsKeyboardProbe {
  [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
  [DllImport("user32.dll")] static extern uint SendInput(uint count,RoutedKeyboard.Input[] input,int size);
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern IntPtr GetModuleHandle(string module);
- static IntPtr handle;static Hook callback;static bool testing,deleteHadCtrl,deleteHadWin,restored=true;static int deletes;
+ static IntPtr handle;static Hook callback;static bool testing,deleteHadCtrl,deleteHadWin,restored=true;static int deletes,ctrlBackspaces;
  static readonly List<int> nativeMasks=new List<int>();
  static readonly int[] expectedMasks={1,2,4,8,85};
  static bool NativePassed(){return nativeMasks.Count==expectedMasks.Length && string.Join(",",nativeMasks)==string.Join(",",expectedMasks);}
@@ -32,6 +32,7 @@ static class WindowsKeyboardProbe {
     return new IntPtr(1);
    }
    if((key.code==8 || key.code==0x58) && (key.flags&0x10)!=0 && key.extra==UIntPtr.Zero) {
+    if(key.code==8 && (key.flags&0x80)==0 && (GetAsyncKeyState(0x11)&0x8000)!=0)ctrlBackspaces++;
     CallNextHookEx(handle,code,message,data);return new IntPtr(1);
    }
   }
@@ -69,11 +70,11 @@ static class WindowsKeyboardProbe {
    else if(phase>=17 && phase<22){int mask=expectedMasks[phase-17];native.NativeModifiers(mask);native.NativeKey(0x7F,true,mask);native.NativeKey(0x7F,false,mask);native.SetNativeKeyboard(false);}
    else {
     released=(GetAsyncKeyState(0x11)&0x8000)==0 && (GetAsyncKeyState(0x5B)&0x8000)==0 && (GetAsyncKeyState(0x5C)&0x8000)==0;
-    timer.Stop();File.WriteAllText(result,new JavaScriptSerializer().Serialize(new{pass=deletes==6 && !deleteHadCtrl && !deleteHadWin && released && restored && NativePassed(),deleteEvents=deletes,deleteHadCtrl=deleteHadCtrl,deleteHadWin=deleteHadWin,modifiersReleased=released,modifiersRestored=restored,nativeMasks=nativeMasks}));Application.ExitThread();
+    timer.Stop();File.WriteAllText(result,new JavaScriptSerializer().Serialize(new{pass=deletes==5 && ctrlBackspaces==1 && !deleteHadCtrl && !deleteHadWin && released && restored && NativePassed(),deleteEvents=deletes,ctrlBackspaces=ctrlBackspaces,deleteHadCtrl=deleteHadCtrl,deleteHadWin=deleteHadWin,modifiersReleased=released,modifiersRestored=restored,nativeMasks=nativeMasks}));Application.ExitThread();
    }
    phase++;
   };
   try{timer.Start();Application.Run();}finally{UnhookWindowsHookEx(handle);timer.Dispose();native.Dispose();}
-  return deletes==6 && !deleteHadCtrl && !deleteHadWin && released && restored && NativePassed()?0:1;
+  return deletes==5 && ctrlBackspaces==1 && !deleteHadCtrl && !deleteHadWin && released && restored && NativePassed()?0:1;
  }
 }

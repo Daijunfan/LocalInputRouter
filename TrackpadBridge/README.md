@@ -1,5 +1,7 @@
 # Native trackpad bridge
 
+Receiver 1.1.5 keeps Ctrl+Backspace unchanged. Command+Backspace uses the existing authenticated Delete request from the Mac app. The old injected Ctrl+Backspace fallback is no longer used, so both physical Ctrl and routed Mac Ctrl retain their Windows meaning. Command continues to provide the Mac-style Ctrl shortcuts.
+
 Receiver 1.1.4 retains native touchpad routing and the authenticated local-screenshot menu mask, and releases held RDP Win modifiers while sending an authenticated `delete`. Its handshake advertises `deleteKey` and `localScreenshots`; old clients remain supported. Windows App handles the native RDP pointer without a second cursor window.
 
 The Mac router and Windows physical-mouse utility are independent.
@@ -48,6 +50,6 @@ csc.exe /target:winexe /r:System.Web.Extensions.dll /out:TrackpadReceiver.exe Na
 
 Mac Command 已由原路由映射为 Windows Ctrl。本接收端把路由注入的 Ctrl+Backspace 转为普通 Delete，并接受 Mac 前台 DJF-Windows 窗口的认证 Delete 请求；发送 Delete 前临时释放该路由 Ctrl，随后恢复，并成对发送按下/松开。Windows 实体键盘的 Ctrl+Backspace、其他修饰键组合及语音文字注入保留原用途。
 
-部署源码：`Receiver.cs`、`NativeTouchpad.cs`、`NativeScroll.cs`、`ThreeFingerDesktop.cs`、`DeleteShortcut.cs`、`RoutedKeyboard.cs`。将这些文件及 `WindowsBindingsChecks.cs` 放到 Windows `%LOCALAPPDATA%\DJF-Windows\updates\receiver-1.1.4`，执行 `install-windows-bindings.ps1`。脚本先编译并运行检查，再更新当前接收端，复用原有登录任务。安装不修改 Mac 程序或设置。
+部署源码：`Receiver.cs`、`NativeTouchpad.cs`、`NativeScroll.cs`、`ThreeFingerDesktop.cs`、`DeleteShortcut.cs`、`RoutedKeyboard.cs`。将这些文件及 `WindowsBindingsChecks.cs` 放到 Windows `%LOCALAPPDATA%\DJF-Windows\updates\receiver-1.1.5`，执行 `install-windows-bindings.ps1`。脚本先编译并运行检查，再更新当前接收端，复用原有登录任务。若现有程序文件拒绝覆盖，任务改为运行本次编译的版本目录；认证与状态仍使用原来的用户目录。安装不修改 Mac 程序或设置。
 
 已通过纯映射检查及原生低级按键测试；测试器拦住 Delete，确保不删除用户文件。详细结果见项目根目录 `verification.json`。

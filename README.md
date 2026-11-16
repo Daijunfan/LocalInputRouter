@@ -1,5 +1,7 @@
 # 输入路由 App
 
+1.10.11 按最新键位要求保留左右 Ctrl 为 Windows Ctrl，同时保留 Command 的 Ctrl 组合键用法。Command+⌫ 仍通过认证通道发送 Delete；Windows 接收端 1.1.5 取消旧的 Ctrl+Backspace 自动改写，让 Ctrl+Backspace 保持 Windows 原生行为。
+
 1.10.10 修复未路由组合键在后台恢复或刚切到 DJF-Windows 窗口时短暂失效：按键直接核对前台窗口，不再同步等待 AppKit 主线程；互换只依赖实际按键通道，不再依赖 Deskflow 连接和定时刷新缓存。首个组合键在同一认证流中先启用互换，再发送按键。Mac 本机快捷键保持原样。
 
 1.10.9 修正 Windows App 来源图片的格式：读取剪贴板时确认 PNG 文件头，将误标为 PNG 的 TIFF 实际编码成 PNG，并在本机明确写入 PNG 与 TIFF。相同图片被 RDP 再次提供时也修正本机格式，避免网络去重跳过修复；本机原生 TIFF 截图和带文件地址的复制内容保持原样。1.10.8 的修饰键互换与删除行为保留。

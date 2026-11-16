@@ -23,9 +23,8 @@ sealed class RoutedKeyboard : IDisposable {
  [DllImport("user32.dll")] static extern bool PeekMessage(out Message message,IntPtr window,uint first,uint last,uint flags);
  [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern IntPtr GetModuleHandle(string module);
- readonly DeleteShortcut shortcut=new DeleteShortcut();
  readonly ManualResetEvent ready=new ManualResetEvent(false);readonly Thread worker;
- Hook callback;IntPtr hook;uint threadId;volatile bool enabled,resetRequested;
+ Hook callback;IntPtr hook;uint threadId;volatile bool enabled;
  long remaps;
  long screenshotMaskUntil;
  volatile bool nativeKeyboard;
@@ -36,7 +35,7 @@ sealed class RoutedKeyboard : IDisposable {
  public long NativeKeyEvents {get{return Interlocked.Read(ref nativeKeyEvents);}}
  public long NativeModifierEvents {get{return Interlocked.Read(ref nativeModifierEvents);}}
  public long Remaps {get{return Interlocked.Read(ref remaps);}}
- public void SetEnabled(bool value){if(!value){SetNativeKeyboard(false);resetRequested=true;Interlocked.Exchange(ref screenshotMaskUntil,0);}enabled=value;}
+ public void SetEnabled(bool value){if(!value){SetNativeKeyboard(false);Interlocked.Exchange(ref screenshotMaskUntil,0);}enabled=value;}
  public void PrepareLocalScreenshot(){Interlocked.Exchange(ref screenshotMaskUntil,DateTime.UtcNow.AddSeconds(10).Ticks);}
  public RoutedKeyboard() {
   worker=new Thread(Run){IsBackground=true,Name="DJF routed keyboard"};worker.Start();ready.WaitOne();
@@ -50,7 +49,6 @@ sealed class RoutedKeyboard : IDisposable {
  }
  IntPtr KeyEvent(int code,IntPtr message,IntPtr data) {
   if(code>=0) {
-   if(resetRequested){shortcut.Reset();resetRequested=false;}
    var key=(Key)Marshal.PtrToStructure(data,typeof(Key));
    if(key.extra.ToUInt64()!=OwnTag) {
     if(nativeKeyboard && (key.flags&0x10)==0 && (key.code==0x11 || key.code==0xA2 || key.code==0xA3 || key.code==0x5B || key.code==0x5C)) {
@@ -61,14 +59,8 @@ sealed class RoutedKeyboard : IDisposable {
      var masked=ScreenshotReleaseInputs((ushort)key.code);
      if(SendInput((uint)masked.Length,masked,Marshal.SizeOf(typeof(Input)))==masked.Length)return new IntPtr(1);
     }
-    bool other=(GetAsyncKeyState(0x10)&0x8000)!=0 || (GetAsyncKeyState(0x12)&0x8000)!=0 || (GetAsyncKeyState(0x5B)&0x8000)!=0 || (GetAsyncKeyState(0x5C)&0x8000)!=0;
-    ushort[] controls;
-    if(shortcut.Handle(key.code,key.flags,key.extra.ToUInt64(),enabled,other,out controls)) {
-     if(controls!=null) {
-      SendDelete(controls);
-     }
-     return new IntPtr(1);
-    }
+    // Command+Backspace arrives as authenticated Delete. Ordinary Ctrl+
+    // Backspace must keep Windows' native meaning, including Deskflow input.
    }
   }
   return CallNextHookEx(hook,code,message,data);

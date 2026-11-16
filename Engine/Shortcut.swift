@@ -5,7 +5,7 @@ import CoreGraphics
 enum WindowsKeyboard {
     private static let modifiers: [(CGEventFlags, UInt64, UInt64, Int, Int, String?)] = [
         (.maskCommand, 0x8, 0x10, 1, 2, "modifierSuper=ctrl"),
-        (.maskControl, 0x1, 0x2000, 4, 8, "modifierCtrl=super"),
+        (.maskControl, 0x1, 0x2000, 1, 2, nil),
         (.maskShift, 0x2, 0x4, 16, 32, nil),
         (.maskAlternate, 0x20, 0x40, 64, 128, nil)]
     static var deskflowModifiers: String { modifiers.compactMap { $0.5 }.joined(separator: "\n") }

@@ -126,11 +126,11 @@ import Carbon
         control.setRDPPointer(true); control.setNativeKeysReady(true); control.setNativeRDPKeyboard(true)
         var keys = [(UInt16, Bool, Int)](), modifiers = [Int]()
         control.onNativeKey = { keys.append(($0,$1,$2)) }; control.onNativeModifiers = { modifiers.append($0) }
-        precondition(WindowsKeyboard.deskflowModifiers == "modifierSuper=ctrl\nmodifierCtrl=super")
+        precondition(WindowsKeyboard.deskflowModifiers == "modifierSuper=ctrl")
         for (key, flags, expected) in [(kVK_Command,CGEventFlags(rawValue:0x100008),1),
                                       (kVK_RightCommand,CGEventFlags(rawValue:0x100010),2),
-                                      (kVK_Control,CGEventFlags(rawValue:0x40001),4),
-                                      (kVK_RightControl,CGEventFlags(rawValue:0x42000),8)] {
+                                      (kVK_Control,CGEventFlags(rawValue:0x40001),1),
+                                      (kVK_RightControl,CGEventFlags(rawValue:0x42000),2)] {
             precondition(handle(key,.flagsChanged,flags), "Original modifier transitions stay available to macOS")
             precondition(modifiers.last == expected)
             for letter in [kVK_ANSI_C,kVK_ANSI_X,kVK_ANSI_Q,kVK_ANSI_T,kVK_LeftArrow,kVK_F16] {
@@ -143,7 +143,14 @@ import Carbon
             precondition(modifiers.last == 0)
         }
         let all = CGEventFlags([.maskCommand,.maskControl,.maskShift,.maskAlternate])
-        precondition(!handle(kVK_ANSI_C,.keyDown,all) && keys.last!.2 == 85)
+        precondition(!handle(kVK_ANSI_C,.keyDown,all) && keys.last!.2 == 81)
+        precondition(WindowsKeyboard.modifierMask(CGEventFlags(rawValue:0x140009)) == 1,
+                     "Holding Command and Control together must share Ctrl without creating a Windows key")
+        precondition(WindowsKeyboard.modifierMask(CGEventFlags(rawValue:0x140019)) == 3,
+                     "Left and right Ctrl states must remain independent")
+        precondition(!handle(kVK_Delete,.keyDown,.maskControl) && keys.last!.0 == 8 && keys.last!.2 == 1,
+                     "Ctrl+Backspace must remain Ctrl+Backspace rather than plain Delete")
+        precondition(!handle(kVK_Delete,.keyUp,.maskControl) && deletes == 4)
         precondition(handle(kVK_Command,.flagsChanged))
         precondition(!handle(kVK_ANSI_C,.keyUp), "A chord key released after its modifier must still be released remotely")
         let count=keys.count
@@ -166,7 +173,7 @@ import Carbon
         viewerFocused=true; control.setNativeKeysReady(false)
         precondition(handle(kVK_ANSI_C,.keyDown,.maskCommand), "A disconnected native channel cannot consume input")
         control.configure(available: true, pid: getpid())
-        print("PASS: left/right Command and Control fully exchange; all shortcut keys share one projection; screenshot, Unicode, voice and other apps remain native")
+        print("PASS: left/right Control stays Ctrl; Command also maps to Ctrl; screenshot, Unicode, voice and other apps remain native")
 
         control.setRDPPointer(true); control.setNativeGestures(true); control.setMacScroll(true)
         control.setPointerGain(10)
