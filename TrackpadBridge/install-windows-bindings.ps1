@@ -7,11 +7,11 @@ $files=@('NativeTouchpad.cs','NativeScroll.cs','ThreeFingerDesktop.cs','DeleteSh
 if($LASTEXITCODE -ne 0){throw 'Windows binding checks did not compile'}
 & "$source\WindowsBindingsChecks.exe"
 if($LASTEXITCODE -ne 0){throw 'Windows binding checks failed'}
-& $compiler /nologo /platform:x64 /target:winexe /out:"$source\TrackpadReceiver.exe" /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll $files (Join-Path $source 'Receiver.cs')
-if($LASTEXITCODE -ne 0){throw 'Receiver did not compile'}
 Stop-ScheduledTask -TaskName 'DJF-Windows-Native-Trackpad'
 for($i=0;$i -lt 20 -and (Get-Process TrackpadReceiver -ErrorAction SilentlyContinue);$i++){Start-Sleep -Milliseconds 100}
 if(Get-Process TrackpadReceiver -ErrorAction SilentlyContinue){throw 'Old receiver is still running'}
+& $compiler /nologo /platform:x64 /target:winexe /out:"$source\TrackpadReceiver.exe" /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll $files (Join-Path $source 'Receiver.cs')
+if($LASTEXITCODE -ne 0){throw 'Receiver did not compile'}
 $exe=Join-Path $root 'TrackpadReceiver.exe'
 try { Copy-Item "$source\TrackpadReceiver.exe" $exe -Force }
 catch [UnauthorizedAccessException] { $exe=Join-Path $source 'TrackpadReceiver.exe' }
